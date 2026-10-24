@@ -77,7 +77,7 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 - [X] T027 [US1] Wire publishing in `internal/session/publish.go`: add send tracks before answering, announce sources in presence (existing `sourcesPresence`), start the encoder after ICE connects, `FileSource(path, loop)` in `jmt/source.go`; file not readable → error before joining
 - [X] T028 [US1] CLI `--publish file:PATH|file-loop:PATH` and `--publish-size WxH` in `cmd/jitsi-media-tools/flags.go`
 - [X] T029 [US1] Live test `tests/live/publish_test.go` (`//go:build live`, `JMT_URL`, `JMT_INSECURE`): session A publishes a lavfi-generated file; session B (receive only) gets RTP for both kinds within 10 s (SC-001)
-- [ ] T030 [US1] Hand check quickstart scenario 1 against `https://localhost:8443/IntriguingClimatesSupposeProbably` in a browser; record result in `specs/001-jitsi-media-session/checklists/validation.md`; commit
+- [X] T030 [US1] Hand check quickstart scenario 1 against `https://localhost:8443/IntriguingClimatesSupposeProbably` in a browser; record result in `specs/001-jitsi-media-session/checklists/validation.md`; commit
 
 **Checkpoint**: MVP — a file is seen and heard in a Jitsi room.
 
