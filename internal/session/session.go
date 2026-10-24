@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -200,7 +201,11 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	if err != nil {
 		return t, err
 	}
-	if err := caps.Missing(s.cfg.FFmpegNeeds...); err != nil {
+	needs := s.cfg.FFmpegNeeds
+	if s.cfg.Publish != nil {
+		needs = append(slices.Clone(needs), publishNeeds...)
+	}
+	if err := caps.Missing(needs...); err != nil {
 		return t, err
 	}
 	t.ffmpeg, t.caps = bin, caps

@@ -24,6 +24,7 @@ type Publish struct {
 type media struct {
 	s     *Session
 	tools tools
+	pub   *publisher // Nil when publishing nothing
 }
 
 func newMedia(s *Session, t tools) *media {
@@ -33,10 +34,7 @@ func newMedia(s *Session, t tools) *media {
 // prepare checks the publish source before joining.
 func (m *media) prepare(ctx context.Context) error {
 	if p := m.s.cfg.Publish; p != nil {
-		if p.Width == 0 || p.Height == 0 {
-			p.Width, p.Height = 1280, 720
-		}
-		return p.Input.check()
+		return m.preparePublish(ctx, p)
 	}
 	return nil
 }
@@ -70,9 +68,14 @@ func (m *media) publishHeight() int {
 	return 0
 }
 
-func (m *media) onTrack(t *peer.RemoteTrack)   {}
-func (m *media) onKeyframeRequest()            {}
-func (m *media) onConnected()                  {}
+func (m *media) onTrack(t *peer.RemoteTrack) {}
+func (m *media) onKeyframeRequest()          {}
+func (m *media) onConnected() {
+	if m.pub != nil {
+		m.pub.start()
+	}
+}
+
 func (m *media) participantLeft(p Participant) {}
 func (m *media) speakersChanged()              {}
 func (m *media) selectionChanged()             {}

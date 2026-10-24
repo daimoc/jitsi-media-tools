@@ -67,16 +67,16 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 ### Tests for US1 ⚠️ write first
 
-- [ ] T023 [P] [US1] Test `internal/ffmpeg/encoder_test.go`: an encoder built from a `lavfi` input (`testsrc2=size=1280x720:rate=30`, `sine`) yields IVF VP8 frames on stdout and Ogg Opus pages on the loopback, keyframe at least every 2 s, 20 ms Opus packets
-- [ ] T024 [P] [US1] Test `internal/session/publish_test.go`: with fake signaling + in-process receiving peer, a file source produces RTP on both send tracks with increasing timestamps from 2^30; file-once ends the session with state `closed`; loop keeps sending past the file's duration
+- [X] T023 [P] [US1] Test `internal/ffmpeg/encoder_test.go`: an encoder built from a `lavfi` input (`testsrc2=size=1280x720:rate=30`, `sine`) yields IVF VP8 frames on stdout and Ogg Opus pages on the loopback, keyframe at least every 2 s, 20 ms Opus packets
+- [X] T024 [P] [US1] Test `internal/session/publish_test.go`: with fake signaling + in-process receiving peer, a file source produces RTP on both send tracks with increasing timestamps from 2^30; file-once ends the session with state `closed`; loop keeps sending past the file's duration
 
 ### Implementation for US1
 
-- [ ] T025 [US1] Implement `internal/ffmpeg/encoder.go`: `EncoderArgs(Input, EncodeOptions)` and `StartEncoder(ctx, …) (*Encoder, error)` exposing `Video() <-chan rtpmedia.Frame` and `Audio() <-chan rtpmedia.Frame`; inputs: file (`-re`, `-stream_loop -1` when loop), raw program frames (used by US3), devices (US7), OBS (US4); VP8 `-c:v libvpx -deadline realtime -cpu-used 8 -lag-in-frames 0 -error-resilient 1 -g 60 -b:v 1500k`, scaled/padded to the publish size (default 1280x720), Opus `-c:a libopus -ar 48000 -frame_duration 20 -application voip`; audio-only / video-only (FR-009)
-- [ ] T026 [US1] Implement `internal/rtpmedia/sender.go`: pace frames from the encoder into send tracks (from T005), placeholder frames (black VP8 keyframe + Opus silence encoded once at start) while the source has no data (FR-010)
-- [ ] T027 [US1] Wire publishing in `internal/session/publish.go`: add send tracks before answering, announce sources in presence (existing `sourcesPresence`), start the encoder after ICE connects, `FileSource(path, loop)` in `jmt/source.go`; file not readable → error before joining
-- [ ] T028 [US1] CLI `--publish file:PATH|file-loop:PATH` and `--publish-size WxH` in `cmd/jitsi-media-tools/flags.go`
-- [ ] T029 [US1] Live test `tests/live/publish_test.go` (`//go:build live`, `JMT_URL`, `JMT_INSECURE`): session A publishes a lavfi-generated file; session B (receive only) gets RTP for both kinds within 10 s (SC-001)
+- [X] T025 [US1] Implement `internal/ffmpeg/encoder.go`: `EncoderArgs(Input, EncodeOptions)` and `StartEncoder(ctx, …) (*Encoder, error)` exposing `Video() <-chan rtpmedia.Frame` and `Audio() <-chan rtpmedia.Frame`; inputs: file (`-re`, `-stream_loop -1` when loop), raw program frames (used by US3), devices (US7), OBS (US4); VP8 `-c:v libvpx -deadline realtime -cpu-used 8 -lag-in-frames 0 -error-resilient 1 -g 60 -b:v 1500k`, scaled/padded to the publish size (default 1280x720), Opus `-c:a libopus -ar 48000 -frame_duration 20 -application voip`; audio-only / video-only (FR-009)
+- [X] T026 [US1] Implement `internal/rtpmedia/sender.go`: pace frames from the encoder into send tracks (from T005), placeholder frames (black VP8 keyframe + Opus silence encoded once at start) while the source has no data (FR-010)
+- [X] T027 [US1] Wire publishing in `internal/session/publish.go`: add send tracks before answering, announce sources in presence (existing `sourcesPresence`), start the encoder after ICE connects, `FileSource(path, loop)` in `jmt/source.go`; file not readable → error before joining
+- [X] T028 [US1] CLI `--publish file:PATH|file-loop:PATH` and `--publish-size WxH` in `cmd/jitsi-media-tools/flags.go`
+- [X] T029 [US1] Live test `tests/live/publish_test.go` (`//go:build live`, `JMT_URL`, `JMT_INSECURE`): session A publishes a lavfi-generated file; session B (receive only) gets RTP for both kinds within 10 s (SC-001)
 - [ ] T030 [US1] Hand check quickstart scenario 1 against `https://localhost:8443/IntriguingClimatesSupposeProbably` in a browser; record result in `specs/001-jitsi-media-session/checklists/validation.md`; commit
 
 **Checkpoint**: MVP — a file is seen and heard in a Jitsi room.

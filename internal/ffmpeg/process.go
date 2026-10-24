@@ -39,8 +39,17 @@ type Spec struct {
 	// StdinFrom, when set, is the process's stdin (e.g. another process's
 	// stdout). Exclusive with Stdin.
 	StdinFrom io.Reader
-	Logger    *slog.Logger
+	// KeepStderr keeps the whole stderr (up to maxStderr bytes) for
+	// stderrAll, not only the last lines.
+	KeepStderr bool
+	// NoGrace makes Stop kill the process at once, for processes whose
+	// outputs need no finishing (encoders read by Go).
+	NoGrace bool
+	Logger  *slog.Logger
 }
+
+// maxStderr bounds the stderr kept by Spec.KeepStderr.
+const maxStderr = 64 << 10
 
 // Process is a running ffmpeg or ffplay.
 type Process struct {
@@ -56,8 +65,11 @@ type Process struct {
 	err      error // Set before done is closed
 	stopOnce sync.Once
 
-	tailMu sync.Mutex
-	tail   []string // Last stderr lines, for error messages
+	tailMu  sync.Mutex
+	tail    []string // Last stderr lines, for error messages
+	keep    bool
+	noGrace bool
+	all     strings.Builder // Whole stderr when keep
 }
 
 // Start starts the process. It is stopped (Stop) when ctx ends.
@@ -69,7 +81,7 @@ func Start(ctx context.Context, s Spec) (*Process, error) {
 		s.Name = s.Bin
 	}
 	cmd := exec.Command(s.Bin, s.Args...)
-	p := &Process{cmd: cmd, name: s.Name, logger: s.Logger.With(slog.String("process", s.Name)), done: make(chan struct{})}
+	p := &Process{cmd: cmd, name: s.Name, logger: s.Logger.With(slog.String("process", s.Name)), done: make(chan struct{}), keep: s.KeepStderr, noGrace: s.NoGrace}
 	setProcAttr(cmd)
 	var err error
 	switch {
@@ -114,6 +126,9 @@ func Start(ctx context.Context, s Spec) (*Process, error) {
 			if len(p.tail) > 10 {
 				p.tail = p.tail[1:]
 			}
+			if p.keep && p.all.Len() < maxStderr {
+				p.all.WriteString(line + "\n")
+			}
 			p.tailMu.Unlock()
 		}
 	}()
@@ -147,6 +162,14 @@ func (p *Process) stderrTail() string {
 	return ": " + strings.Join(p.tail, " | ")
 }
 
+// stderrAll returns the stderr kept with Spec.KeepStderr; complete once
+// Done is closed.
+func (p *Process) stderrAll() string {
+	p.tailMu.Lock()
+	defer p.tailMu.Unlock()
+	return p.all.String()
+}
+
 // Done is closed when the process has exited.
 func (p *Process) Done() <-chan struct{} { return p.done }
 
@@ -159,6 +182,10 @@ func (p *Process) Err() error { return p.err }
 // the process has exited and is safe to call several times.
 func (p *Process) Stop() {
 	p.stopOnce.Do(func() {
+		if p.noGrace {
+			p.group.kill(p.cmd)
+			return
+		}
 		if p.Stdin != nil {
 			p.Stdin.Close()
 		}
