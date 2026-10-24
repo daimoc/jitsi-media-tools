@@ -1,0 +1,9 @@
+Devices:
+ D. = Demuxing supported
+ .E = Muxing supported
+ ---
+ DE alsa            ALSA audio output
+  E fbdev           Linux framebuffer
+ D  lavfi           Libavfilter virtual input device
+ DE pulse           Pulse audio output
+ DE v4l2            Video4Linux2 output device

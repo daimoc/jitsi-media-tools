@@ -13,6 +13,7 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -98,6 +99,7 @@ type SignalingClient struct {
 	mu       sync.RWMutex
 	sessions map[string]*JingleSession // Guarded by mu
 	handler  signaling.SignalingHandler // Guarded by mu
+	policy   *signaling.ReceivePolicy   // Guarded by mu; nil: default
 
 	wg          sync.WaitGroup  // Background negotiations
 	closedCtx   context.Context // Cancelled by Disconnect: aborts pending connects and negotiations
@@ -185,8 +187,12 @@ func (s *SignalingClient) Connect(ctx context.Context) error {
 
 	wsConn, resp, err := ws.Dial(ctx, wsURL, &ws.DialOptions{
 		Subprotocols: []string{"xmpp"},
+		HTTPClient:   HTTPClient(s.config.Insecure),
 	})
 	if err != nil {
+		if strings.Contains(err.Error(), "certificate") {
+			return fmt.Errorf("%w: %v (use the insecure option for a self-signed certificate)", ErrServerUnreachable, err)
+		}
 		// Prosody rejects an invalid or expired token at the upgrade.
 		if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
 			return fmt.Errorf("%w: %v", ErrAuthFailed, err)
@@ -495,7 +501,48 @@ type mucPresence struct {
 	Type  string        `xml:"type,attr"`
 	X     *mucUserX     `xml:"http://jabber.org/protocol/muc#user x"`
 	Error *stanza.Error `xml:"error"`
+
+	// Jitsi participant state (lib-jitsi-meet presence extensions).
+	Nick       string `xml:"http://jabber.org/protocol/nick nick"`
+	AudioMuted string `xml:"http://jitsi.org/jitmeet/audio audiomuted"`
+	VideoMuted string `xml:"http://jitsi.org/jitmeet/video videomuted"`
+	SourceInfo string `xml:"SourceInfo"` // JSON: source name -> {"muted": bool, ...}
 }
+
+// occupant returns the participant state a presence announces.
+func (p *mucPresence) occupant(id string) signaling.Occupant {
+	o := signaling.Occupant{
+		ID:          id,
+		DisplayName: strings.TrimSpace(p.Nick),
+		AudioMuted:  p.AudioMuted == "true",
+		VideoMuted:  p.VideoMuted == "true",
+		Left:        p.Type == string(stanza.UnavailablePresence),
+	}
+	// SourceInfo, when present, is the current source-name signaling and
+	// wins over the legacy elements.
+	var info map[string]struct {
+		Muted bool `json:"muted"`
+	}
+	if p.SourceInfo != "" && json.Unmarshal([]byte(p.SourceInfo), &info) == nil && len(info) > 0 {
+		o.AudioMuted, o.VideoMuted = true, true
+		for name, si := range info {
+			i := strings.LastIndex(name, "-")
+			if i < 0 || i+1 >= len(name) {
+				continue
+			}
+			switch name[i+1] {
+			case 'a':
+				o.AudioMuted = o.AudioMuted && si.Muted
+			case 'v':
+				o.VideoMuted = o.VideoMuted && si.Muted
+			}
+		}
+	}
+	return o
+}
+
+// focusNick is the occupant resource of Jicofo in the room.
+const focusNick = "focus"
 
 type mucUserX struct {
 	Statuses []struct {
@@ -558,6 +605,14 @@ func (s *SignalingClient) handlePresence(t xmlstream.TokenReadEncoder, start *xm
 		}
 	case !self:
 		s.logger.Debug("Participant presence", slog.String("from", p.From), slog.String("type", p.Type))
+		if nick := from.Resourcepart(); nick != focusNick && nick != "" {
+			s.mu.RLock()
+			handler := s.handler
+			s.mu.RUnlock()
+			if o, ok := handler.(signaling.RoomObserver); ok {
+				o.OnOccupant(p.occupant(nick))
+			}
+		}
 		if p.Type == string(stanza.UnavailablePresence) {
 			// Jicofo sends no source-remove for a participant who leaves:
 			// clients drop its sources on its unavailable presence.

@@ -142,6 +142,8 @@ type bridgeChannel struct {
 	open      bool
 	stopped   bool
 	prefs     receivePrefs
+	policy    *signaling.ReceivePolicy // When set, replaces prefs' video constraints
+	onSpeaker func(id string, previous []string)
 	lastSent  map[string]string // colibriClass -> last message sent; cleared on close
 	logged    map[string]bool   // Fallback reasons already logged
 	openTimer *time.Timer
@@ -218,16 +220,55 @@ func (b *bridgeChannel) OnClose() {
 	}
 }
 
-// OnMessage ignores the bridge's messages (FR-009), logging their class.
+// setPolicy replaces the video constraints sent (nil: back to prefs').
+func (b *bridgeChannel) setPolicy(p *signaling.ReceivePolicy) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.policy = p
+	b.sendLocked()
+}
+
+// OnMessage handles the bridge's dominant speaker changes and logs the
+// class of the other messages.
 func (b *bridgeChannel) OnMessage(text string) {
 	var m struct {
-		Class string `json:"colibriClass"`
+		Class    string   `json:"colibriClass"`
+		Speaker  string   `json:"dominantSpeakerEndpoint"`
+		Previous []string `json:"previousSpeakers"`
 	}
 	if err := json.Unmarshal([]byte(text), &m); err != nil {
 		b.logger.Debug("Ignoring an invalid bridge channel message", slog.String("error", err.Error()))
 		return
 	}
 	b.logger.Debug("Bridge channel message", slog.String("colibri_class", m.Class))
+	if m.Class == "DominantSpeakerEndpointChangeEvent" && m.Speaker != "" {
+		b.mu.Lock()
+		f := b.onSpeaker
+		b.mu.Unlock()
+		if f != nil {
+			f(m.Speaker, m.Previous)
+		}
+	}
+}
+
+// policyConstraintsMessage builds the ReceiverVideoConstraints of a policy.
+func policyConstraintsMessage(p *signaling.ReceivePolicy) string {
+	m := struct {
+		Class       string                      `json:"colibriClass"`
+		LastN       int                         `json:"lastN"`
+		Selected    []string                    `json:"selectedSources,omitempty"`
+		OnStage     []string                    `json:"onStageSources,omitempty"`
+		Default     videoConstraints            `json:"defaultConstraints"`
+		Constraints map[string]videoConstraints `json:"constraints,omitempty"`
+	}{Class: "ReceiverVideoConstraints", LastN: p.LastN, Selected: p.Selected, OnStage: p.OnStage,
+		Default: videoConstraints{MaxHeight: p.DefaultMaxHeight}}
+	if len(p.MaxHeights) > 0 {
+		m.Constraints = map[string]videoConstraints{}
+		for name, h := range p.MaxHeights {
+			m.Constraints[name] = videoConstraints{MaxHeight: h}
+		}
+	}
+	return marshalMessage(m)
 }
 
 // sendLocked sends the messages for the current preferences that differ from
@@ -239,8 +280,12 @@ func (b *bridgeChannel) sendLocked() {
 	if b.prefs.capped && b.prefs.videoUnnamed {
 		b.logOnceLocked("video-unnamed", "A received video source has no name: asking for every video")
 	}
+	video := videoConstraintsMessage(b.prefs)
+	if b.policy != nil {
+		video = policyConstraintsMessage(b.policy)
+	}
 	messages := []struct{ class, text string }{
-		{"ReceiverVideoConstraints", videoConstraintsMessage(b.prefs)},
+		{"ReceiverVideoConstraints", video},
 	}
 	if text, ok := audioSubscriptionMessage(b.prefs); ok {
 		messages = append(messages, struct{ class, text string }{"ReceiverAudioSubscription", text})

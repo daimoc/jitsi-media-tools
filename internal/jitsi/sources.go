@@ -2,9 +2,12 @@ package jitsi
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/pion/webrtc/v3"
+
+	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
 
 // Jicofo describes a session Plan-B style: one Jingle content per media
@@ -213,6 +216,34 @@ func (ss *sessionSources) receivedNames(content string) (names []string, unnamed
 		names = append(names, name)
 	}
 	return names, unnamed
+}
+
+// remoteSources returns the remote streams of the active sections.
+func (ss *sessionSources) remoteSources() []signaling.RemoteSource {
+	var out []signaling.RemoteSource
+	for _, sec := range ss.sections {
+		if sec.src == nil {
+			continue
+		}
+		rs := signaling.RemoteSource{Kind: sec.content, Owner: sec.src.owner}
+		if ssrc, err := strconv.ParseUint(sec.src.primary, 10, 32); err == nil {
+			rs.SSRC = uint32(ssrc)
+		}
+		for _, src := range sec.src.sources {
+			if src.SSRC == sec.src.primary {
+				rs.Name = src.Name
+				break
+			}
+		}
+		if rs.Owner == "" && rs.Name != "" {
+			// Source names are "<endpoint>-<kind letter><index>".
+			if i := strings.LastIndex(rs.Name, "-"); i > 0 {
+				rs.Owner = rs.Name[:i]
+			}
+		}
+		out = append(out, rs)
+	}
+	return out
 }
 
 // receivePrefs returns what the session receives, for the bridge channel.

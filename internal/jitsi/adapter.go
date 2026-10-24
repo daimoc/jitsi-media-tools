@@ -31,6 +31,8 @@ type JingleConfig struct {
 	ConnectTimeout    string `json:"connect_timeout"`
 	KeepaliveInterval string `json:"keepalive_interval"`
 	Debug             bool   `json:"debug"` // Log all XMPP traffic to stdout
+	// Insecure skips TLS certificate verification (self-signed servers).
+	Insecure bool `json:"insecure"`
 	// NoBridgeChannel leaves the bridge channel closed, so no receive
 	// preferences are sent (the behavior before feature 005); for comparison
 	// runs.
@@ -247,4 +249,16 @@ func (a *Adapter) Disconnect(peerID string) error {
 		return err
 	}
 	return nil
+}
+
+// SetReceivePolicy sets which video the bridge forwards to a connected peer
+// (see SignalingClient.SetReceivePolicy). It does nothing for an unknown
+// peer.
+func (a *Adapter) SetReceivePolicy(peerID string, p *signaling.ReceivePolicy) {
+	a.mu.Lock()
+	client := a.clients[peerID]
+	a.mu.Unlock()
+	if client != nil {
+		client.SetReceivePolicy(p)
+	}
 }

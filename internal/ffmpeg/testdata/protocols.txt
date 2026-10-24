@@ -1,0 +1,16 @@
+Supported file protocols:
+Input:
+  async
+  file
+  pipe
+  rtmp
+  srt
+  tcp
+  udp
+Output:
+  file
+  pipe
+  rtmp
+  srt
+  tcp
+  udp

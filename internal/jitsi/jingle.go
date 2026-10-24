@@ -140,10 +140,14 @@ func (s *SignalingClient) HandleSessionInitiate(fromJID string, jingle *JingleIQ
 	}
 	if offersSCTP(jingle) && !s.config.NoBridgeChannel {
 		session.bridge = newBridgeChannel(s.logger.With(slog.String("sid", jingle.SID)))
+		session.bridge.onSpeaker = s.onDominantSpeaker
+		session.bridge.policy = s.policy
 	}
 	s.sessions[jingle.SID] = session
 	handler := s.handler
+	remote := sources.remoteSources()
 	s.mu.Unlock()
+	notifySources(handler, remote)
 
 	s.logger.Debug("Parsed remote SDP", slog.String("sdp", offer.SDP))
 	switch {
@@ -247,11 +251,13 @@ func (s *SignalingClient) renegotiate(sid string) {
 	if err == nil {
 		session.RemoteSDP = offer
 	}
+	remote := session.sources.remoteSources()
 	s.mu.Unlock()
 	if err != nil {
 		s.logger.Error("Failed to render the updated offer", slog.String("sid", sid), slog.String("error", err.Error()))
 		return
 	}
+	notifySources(handler, remote) // Before the tracks of new sources can start
 
 	s.logger.Debug("Renegotiating", slog.String("sid", sid), slog.String("sdp", offer.SDP))
 	if _, err := handler.Renegotiate(offer.SDP); err != nil {
@@ -259,6 +265,42 @@ func (s *SignalingClient) renegotiate(sid string) {
 		return
 	}
 	s.updateBridge(session)
+}
+
+// notifySources tells a handler that follows the room the remote sources
+// about to be negotiated.
+func notifySources(handler signaling.SignalingHandler, remote []signaling.RemoteSource) {
+	if o, ok := handler.(signaling.RoomObserver); ok {
+		o.OnRemoteSources(remote)
+	}
+}
+
+// onDominantSpeaker forwards the bridge's dominant speaker to the handler.
+func (s *SignalingClient) onDominantSpeaker(id string, previous []string) {
+	s.mu.RLock()
+	handler := s.handler
+	s.mu.RUnlock()
+	if o, ok := handler.(signaling.RoomObserver); ok {
+		o.OnDominantSpeaker(id, previous)
+	}
+}
+
+// SetReceivePolicy sets which video the bridge forwards, for the current
+// sessions and the next ones. Nil restores the default (every negotiated
+// video at the handler's height).
+func (s *SignalingClient) SetReceivePolicy(p *signaling.ReceivePolicy) {
+	s.mu.Lock()
+	s.policy = p
+	var bridges []*bridgeChannel
+	for _, session := range s.sessions {
+		if session.bridge != nil {
+			bridges = append(bridges, session.bridge)
+		}
+	}
+	s.mu.Unlock()
+	for _, b := range bridges {
+		b.setPolicy(p)
+	}
 }
 
 // updateBridge sends the session's current receive preferences on its

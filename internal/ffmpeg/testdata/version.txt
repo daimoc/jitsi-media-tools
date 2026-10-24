@@ -1,0 +1,4 @@
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+configuration: --prefix=/usr --enable-libopus --enable-libvpx --enable-libx264 --enable-libsrt
+libavutil      58. 29.100 / 58. 29.100

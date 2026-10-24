@@ -1,0 +1,10 @@
+Decoders:
+ V..... = Video
+ A..... = Audio
+ ------
+ VFS..D h264                 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10
+ VFS..D vp8                  On2 VP8
+ VFS..D vp9                  Google VP9
+ V....D libvpx               libvpx VP8 (codec vp8)
+ A....D opus                 Opus
+ A....D libopus              libopus Opus (codec opus)

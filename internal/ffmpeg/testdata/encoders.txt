@@ -1,0 +1,16 @@
+Encoders:
+ V..... = Video
+ A..... = Audio
+ S..... = Subtitle
+ .F.... = Frame-level multithreading
+ ..S... = Slice-level multithreading
+ ...X.. = Codec is experimental
+ ....B. = Supports draw_horiz_band
+ .....D = Supports direct rendering method 1
+ ------
+ V....D libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10 (codec h264)
+ V....D libvpx               libvpx VP8 (codec vp8)
+ V....D rawvideo             raw video
+ A....D aac                  AAC (Advanced Audio Coding)
+ A....D libopus              libopus Opus (codec opus)
+ A....D pcm_s16le            PCM signed 16-bit little-endian

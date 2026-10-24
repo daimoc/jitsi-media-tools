@@ -102,3 +102,44 @@ type PlatformAdapter interface {
 	// to call for unknown or already-disconnected peers.
 	Disconnect(peerID string) error
 }
+
+// Occupant is another participant of the room, from its presence.
+type Occupant struct {
+	ID          string // Endpoint id (MUC nick)
+	DisplayName string
+	AudioMuted  bool
+	VideoMuted  bool
+	Left        bool // Unavailable presence: the occupant left
+}
+
+// RemoteSource is a stream another participant sends, as negotiated.
+type RemoteSource struct {
+	SSRC  uint32 // Primary SSRC
+	Kind  string // "audio" or "video"
+	Name  string // Source name, e.g. "abcd1234-v0" ("" if unnamed)
+	Owner string // Endpoint id of the sender ("" if unknown)
+}
+
+// RoomObserver may be implemented by a SignalingHandler to follow the room:
+// participants, their sources and who is speaking. Calls come from
+// signaling goroutines and must not block.
+type RoomObserver interface {
+	OnOccupant(o Occupant)
+	// OnRemoteSources gives every remote source currently negotiated, after
+	// each change.
+	OnRemoteSources(sources []RemoteSource)
+	// OnDominantSpeaker gives the current dominant speaker's endpoint id
+	// and the previous speakers, most recent first.
+	OnDominantSpeaker(id string, previous []string)
+}
+
+// ReceivePolicy is which video the media server should forward (research
+// R8): the LastN most relevant sources (speakers), always including the
+// Selected ones, at DefaultMaxHeight, or MaxHeights[source] when set.
+type ReceivePolicy struct {
+	LastN            int
+	Selected         []string // Source names, always forwarded
+	OnStage          []string // Source names shown large
+	DefaultMaxHeight int
+	MaxHeights       map[string]int // By source name
+}
