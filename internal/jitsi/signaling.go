@@ -97,7 +97,7 @@ type SignalingClient struct {
 	onLost   func(error) // Called (in its own goroutine) when the connection is lost after joining
 
 	mu       sync.RWMutex
-	sessions map[string]*JingleSession // Guarded by mu
+	sessions map[string]*JingleSession  // Guarded by mu
 	handler  signaling.SignalingHandler // Guarded by mu
 	policy   *signaling.ReceivePolicy   // Guarded by mu; nil: default
 
