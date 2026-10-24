@@ -69,11 +69,11 @@ arguments. Run `jitsi-media-tools join --help` to see every option.
 
 ```bash
 # Play once, then leave
-jitsi-media-tools join --url https://meet.example.org/MyRoom --name Clip --publish file:clip.mp4
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Clip --publish file:samples/clip.mp4
 
 # Loop until Ctrl+C, at 640x360
 jitsi-media-tools join --url https://meet.example.org/MyRoom --name Clip \
-  --publish file-loop:clip.mp4 --publish-size 640x360
+  --publish file-loop:samples/clip.mp4 --publish-size 640x360
 ```
 
 The tool publishes the file's first audio and video streams. It sends VP8 video, scaled to
@@ -110,7 +110,7 @@ import "github.com/daimoc/jitsi-media-tools/jmt"
 s, err := jmt.Join(ctx, jmt.Options{
 	MeetingURL:  "https://meet.example.org/MyRoom",
 	DisplayName: "Bot",
-	Publish:     jmt.WithSize(jmt.FileSource("clip.mp4", true), 640, 360),
+	Publish:     jmt.WithSize(jmt.FileSource("samples/clip.mp4", true), 640, 360),
 	Selection:   jmt.Selection{Limit: 9, Pins: []string{"Alice"}},
 })
 if err != nil {
@@ -141,7 +141,7 @@ return s.Wait()
 (cd tests/platforms/jitsi && ./setup.sh && docker compose up -d)
 source scripts/env.sh
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure \
-  --name Clip --publish file-loop:clip.mp4
+  --name Clip --publish file-loop:samples/clip.mp4
 ```
 
 Open `https://localhost:8443/test` in a browser and accept the certificate. "Clip" appears
