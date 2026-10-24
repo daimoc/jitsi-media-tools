@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/sdp/v3"
@@ -144,12 +145,15 @@ func New(cfg Config) (*Peer, error) {
 func (p *Peer) addLocalTracks() error {
 	p.localTracks = map[string]*webrtc.TrackLocalStaticRTP{}
 	p.senders = map[string]*webrtc.RTPSender{}
+	// One stream per peer, unique in the room: Jicofo refuses an MSID that
+	// another participant already uses.
+	streamID := "jitsi-media-tools-" + uuid.NewString()
 	for _, kind := range p.cfg.Kinds {
 		codec := OpusCodec
 		if kind == KindVideo {
 			codec = VP8Codec
 		}
-		track, err := webrtc.NewTrackLocalStaticRTP(codec, kind, "jitsi-media-tools")
+		track, err := webrtc.NewTrackLocalStaticRTP(codec, kind, streamID)
 		if err != nil {
 			return fmt.Errorf("failed to create %s track: %w", kind, err)
 		}

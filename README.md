@@ -144,7 +144,9 @@ go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure
   --name Clip --publish file-loop:samples/clip.mp4
 ```
 
-Open `https://localhost:8443/test` in a browser and accept the certificate. "Clip" appears
+Open `https://localhost:8443/test` in a browser and accept the certificate. Use
+`localhost`, not `127.0.0.1`: the page connects to `wss://localhost:8443`, so a certificate
+accepted for `127.0.0.1` leaves the meeting unable to join. "Clip" appears
 once someone else is in the room, because the server sets up media only when there is a
 second participant. See [tests/platforms/jitsi/README.md](tests/platforms/jitsi/README.md)
 for the guest and token setups.

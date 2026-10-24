@@ -7,7 +7,10 @@ webrtc-load-engine; the two use the same ports, so stop one before starting
 the other.
 
 - Web and meeting URLs: `https://localhost:8443/<Room>` (self-signed
-  certificate: use `--insecure` / `JMT_INSECURE=1`).
+  certificate: use `--insecure` / `JMT_INSECURE=1`). In a browser, open
+  exactly `localhost`, not `127.0.0.1`: `config.js` points the page at
+  `wss://localhost:8443/xmpp-websocket`, and a certificate accepted for
+  `127.0.0.1` does not cover it, so the meeting never joins.
 - XMPP domain `meet.jitsi`, MUC `muc.meet.jitsi`, WebSocket
   `wss://localhost:8443/xmpp-websocket`: the tool reads them from
   `config.js`.

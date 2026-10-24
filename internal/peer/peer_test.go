@@ -116,3 +116,18 @@ func TestPeer_SendsAndReceives(t *testing.T) {
 		t.Fatal("remote side received no audio")
 	}
 }
+
+// TestPeer_StreamIDIsUnique checks that two peers never share a stream ID:
+// Jicofo rejects a second participant whose MSID is already in the room.
+func TestPeer_StreamIDIsUnique(t *testing.T) {
+	a := newTestPeer(t, KindAudio, KindVideo)
+	b := newTestPeer(t, KindAudio, KindVideo)
+	for _, kind := range []string{KindAudio, KindVideo} {
+		if sa, sb := a.LocalTrack(kind).StreamID(), b.LocalTrack(kind).StreamID(); sa == sb {
+			t.Errorf("%s: both peers use stream ID %q", kind, sa)
+		}
+	}
+	if a.LocalTrack(KindAudio).StreamID() != a.LocalTrack(KindVideo).StreamID() {
+		t.Error("one peer's audio and video are in different streams")
+	}
+}
