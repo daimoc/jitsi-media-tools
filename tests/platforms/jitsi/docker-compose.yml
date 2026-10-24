@@ -1,0 +1,154 @@
+# Minimal docker-jitsi-meet for jitsi-media-tools' live tests: web, prosody,
+# jicofo and jvb only, from github.com/jitsi/docker-jitsi-meet (no recording,
+# SIP, transcription, etherpad or monitoring). Copied from webrtc-load-engine
+# (tests/platforms/docker-jitsi-meet); both use the same ports, so run one
+# at a time.
+name: jmt-jitsi
+
+services:
+    # Frontend (HTTPS, XMPP over WebSocket for the bots)
+    web:
+        image: ${JITSI_IMAGE_REPO:-ghcr.io/jitsi}/web:${JITSI_IMAGE_VERSION:-unstable}
+        restart: ${RESTART_POLICY:-unless-stopped}
+        read_only: true
+        tmpfs:
+            - /run:size=16M,mode=1750,exec
+            - /tmp:size=16M,mode=1777,noexec
+        ports:
+            - '${HTTP_PORT}:8000'
+            - '${HTTPS_PORT}:8443'
+        volumes:
+            - ${CONFIG}/web:/config:Z
+            - ${CONFIG}/storage/web:/storage:Z
+            - ${CONFIG}/web/custom-ca:/usr/local/share/ca-certificates:ro,z
+        labels:
+            service: "jitsi-web"
+        environment:
+            - DISABLE_HTTPS
+            - ENABLE_AUTH
+            - ENABLE_GUESTS
+            - ENABLE_HTTP_REDIRECT
+            - ENABLE_P2P
+            - ENABLE_SIMULCAST
+            - ENABLE_XMPP_WEBSOCKET
+            - PUBLIC_URL
+            - TOKEN_AUTH_URL
+            - TZ
+        networks:
+            meet.jitsi:
+        depends_on:
+            - jvb
+
+    # XMPP server
+    prosody:
+        image: ${JITSI_IMAGE_REPO:-ghcr.io/jitsi}/prosody:${JITSI_IMAGE_VERSION:-unstable}
+        restart: ${RESTART_POLICY:-unless-stopped}
+        read_only: true
+        tmpfs:
+            - /run:size=16M,mode=1750,exec
+            - /tmp:size=16M,mode=1777,noexec
+        expose:
+            - '${XMPP_PORT:-5222}'
+            - '5347'
+            - '${PROSODY_HTTP_PORT:-5280}'
+        labels:
+            service: "jitsi-prosody"
+        volumes:
+            - ${CONFIG}/prosody/config:/config:Z
+            - ${CONFIG}/prosody/prosody-plugins-custom:/prosody-plugins-custom:Z
+            - ${CONFIG}/storage/prosody:/var/lib/prosody:Z
+            - ${CONFIG}/prosody/custom-ca:/usr/local/share/ca-certificates:ro,z
+        environment:
+            - AUTH_TYPE
+            - ENABLE_AUTH
+            - ENABLE_GUESTS
+            - ENABLE_XMPP_WEBSOCKET
+            - JICOFO_AUTH_PASSWORD
+            - JVB_AUTH_PASSWORD
+            - JWT_ACCEPTED_AUDIENCES
+            - JWT_ACCEPTED_ISSUERS
+            - JWT_ALLOW_EMPTY
+            - JWT_APP_ID
+            - JWT_APP_SECRET
+            - LOG_LEVEL
+            - MAX_PARTICIPANTS
+            - PROSODY_C2S_LIMIT
+            - PROSODY_DISABLE_C2S_LIMIT
+            - PROSODY_ENABLE_RATE_LIMITS
+            - PROSODY_RATE_LIMIT_ALLOW_RANGES
+            - PROSODY_RATE_LIMIT_LOGIN_RATE
+            - PROSODY_RATE_LIMIT_SESSION_RATE
+            - PUBLIC_URL
+            - TZ
+        networks:
+            meet.jitsi:
+                aliases:
+                    - ${XMPP_SERVER:-xmpp.meet.jitsi}
+
+    # Focus component
+    jicofo:
+        image: ${JITSI_IMAGE_REPO:-ghcr.io/jitsi}/jicofo:${JITSI_IMAGE_VERSION:-unstable}
+        restart: ${RESTART_POLICY:-unless-stopped}
+        read_only: true
+        tmpfs:
+            - /run:size=32M,mode=1750,exec
+            - /tmp:size=16M,mode=1777,noexec
+        ports:
+            - '127.0.0.1:${JICOFO_REST_PORT:-8888}:8888'
+        volumes:
+            - ${CONFIG}/jicofo:/config:Z
+            - ${CONFIG}/jicofo/custom-ca:/usr/local/share/ca-certificates:ro,z
+        labels:
+            service: "jitsi-jicofo"
+        environment:
+            - AUTH_TYPE
+            - ENABLE_AUTH
+            - JICOFO_AUTH_PASSWORD
+            - JICOFO_CONF_MAX_AUDIO_SENDERS
+            - JICOFO_CONF_MAX_VIDEO_SENDERS
+            - JICOFO_ENABLE_REST
+            - JICOFO_MAX_MEMORY
+            - MAX_BRIDGE_PARTICIPANTS
+            - TZ
+            - SENTRY_DSN="${JICOFO_SENTRY_DSN:-0}"
+        depends_on:
+            - prosody
+        networks:
+            meet.jitsi:
+
+    # Video bridge
+    jvb:
+        image: ${JITSI_IMAGE_REPO:-ghcr.io/jitsi}/jvb:${JITSI_IMAGE_VERSION:-unstable}
+        restart: ${RESTART_POLICY:-unless-stopped}
+        read_only: true
+        tmpfs:
+            - /run:size=32M,mode=1750,exec
+            - /tmp:size=16M,mode=1777,noexec
+        ports:
+            - '${JVB_PORT:-10000}:${JVB_PORT:-10000}/udp'
+            - '127.0.0.1:${JVB_COLIBRI_PORT:-8080}:8080'
+        volumes:
+            - ${CONFIG}/jvb:/config:Z
+            - ${CONFIG}/jvb/custom-ca:/usr/local/share/ca-certificates:ro,z
+        labels:
+            service: "jitsi-jvb"
+        environment:
+            - COLIBRI_REST_ENABLED
+            - DOCKER_HOST_ADDRESS
+            - JVB_ADVERTISE_IPS
+            - JVB_AUTH_PASSWORD
+            - JVB_DISABLE_STUN
+            - JVB_PORT
+            - JVB_STUN_SERVERS
+            - PUBLIC_URL
+            - TZ
+            - VIDEOBRIDGE_MAX_MEMORY
+            - SENTRY_DSN="${JVB_SENTRY_DSN:-0}"
+        depends_on:
+            - prosody
+        networks:
+            meet.jitsi:
+
+# Custom network so all services can communicate using a FQDN
+networks:
+    meet.jitsi:

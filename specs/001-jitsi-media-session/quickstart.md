@@ -2,10 +2,11 @@
 
 ## Prerequisites
 
-- Go (code kept 1.23-compatible): `export PATH=/usr/local/go/bin:$PATH`.
-- ffmpeg ≥ 6 and ffplay with libvpx, libopus, libx264, aac, srt: `sudo apt install ffmpeg`.
-- The local Jitsi server running at `https://localhost:8443` (docker-jitsi-meet,
-  as set up in `webrtc-load-engine/tests/platforms/docker-jitsi-meet`).
+- Go (code kept 1.23-compatible) and ffmpeg ≥ 6 with ffplay (libvpx, libopus, libx264,
+  aac, srt): `sudo apt install ffmpeg`, or `./scripts/get-ffmpeg.sh` (pinned build in
+  `.tools/ffmpeg`, no root), then `source scripts/env.sh`.
+- The local Jitsi server at `https://localhost:8443`: `tests/platforms/jitsi`
+  (`./setup.sh && docker compose up -d`, see its README).
 - A browser in the same room, e.g. `https://localhost:8443/IntriguingClimatesSupposeProbably`.
 - OBS (for scenario 5).
 

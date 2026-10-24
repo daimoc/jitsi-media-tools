@@ -28,7 +28,9 @@ tests/live/              # -tags live
 ## Commands
 
 ```bash
-export PATH=/usr/local/go/bin:$PATH
+./scripts/get-ffmpeg.sh                 # pinned ffmpeg+ffplay into .tools/ffmpeg (no root; macOS: brew)
+source scripts/env.sh                   # .tools/ffmpeg/bin and /usr/local/go/bin in PATH
+(cd tests/platforms/jitsi && ./setup.sh && docker compose up -d)   # local Jitsi on https://localhost:8443
 go build ./...
 go vet ./... && go test -race ./...     # keep green
 JMT_URL=https://localhost:8443/jmt-live JMT_INSECURE=1 go test -tags live -count=1 -v ./tests/live/

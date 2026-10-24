@@ -9,3 +9,5 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+/.tools/
+/tests/platforms/jitsi/.env
