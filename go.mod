@@ -15,6 +15,7 @@ require (
 	github.com/pion/stun v0.6.1
 	github.com/pion/transport/v2 v2.2.10
 	github.com/pion/webrtc/v3 v3.3.6
+	golang.org/x/image v0.20.0
 	golang.org/x/sys v0.35.0
 	mellium.im/sasl v0.3.2
 	mellium.im/xmlstream v0.15.4
