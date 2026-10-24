@@ -121,3 +121,27 @@ func TestSession_GuestUsesAnonymousDomain(t *testing.T) {
 		t.Errorf("guest config %v", f.config)
 	}
 }
+
+func TestSession_TokenSources(t *testing.T) {
+	f := &fakeSignal{}
+	useFake(t, f)
+	s, err := Start(context.Background(), Config{MeetingURL: "https://meet.test/r?jwt=fromurl", DisplayName: "X", Logger: quietLogger, AnonymousDomain: "guest.meet.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	// A token (here from the URL) means an authenticated user: the main
+	// domain, not the guest one.
+	if f.config["jwt"] != "fromurl" || f.config["xmpp_domain"] != "meet.test" {
+		t.Errorf("config %v", f.config)
+	}
+	s, err = Start(context.Background(), Config{MeetingURL: "https://meet.test/r", DisplayName: "X", Logger: quietLogger,
+		AppID: "app", AppSecret: "sec", Moderator: true, Subject: "tenant", TokenTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if f.config["jwt_app_id"] != "app" || f.config["jwt_app_secret"] != "sec" || f.config["jwt_moderator"] != true || f.config["jwt_subject"] != "tenant" || f.config["jwt_ttl"] != "1h0m0s" {
+		t.Errorf("config %v", f.config)
+	}
+}

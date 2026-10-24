@@ -143,3 +143,9 @@ type ReceivePolicy struct {
 	DefaultMaxHeight int
 	MaxHeights       map[string]int // By source name
 }
+
+// HostWaiter may be implemented by a SignalingHandler to know when a guest
+// waits for an authenticated host to start the conference.
+type HostWaiter interface {
+	OnWaitingForHost()
+}

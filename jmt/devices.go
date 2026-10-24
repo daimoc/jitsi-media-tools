@@ -2,7 +2,9 @@ package jmt
 
 import (
 	"context"
-	"errors"
+	"runtime"
+
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 )
 
 // Device is a capture device.
@@ -12,7 +14,23 @@ type Device struct {
 	Description string
 }
 
-// ListDevices returns the machine's cameras and microphones.
-func ListDevices(ctx context.Context, ffmpeg string) ([]Device, error) {
-	return nil, errors.New("device listing is not available yet")
+// ListDevices returns the machine's cameras and microphones. ffmpeg is the
+// executable to ask on macOS and Windows ("" finds it in PATH).
+func ListDevices(ctx context.Context, ffmpegPath string) ([]Device, error) {
+	bin := ""
+	if runtime.GOOS != "linux" { // Linux reads sysfs and pactl
+		var err error
+		if bin, err = ffmpeg.Locate("ffmpeg", ffmpegPath); err != nil {
+			return nil, err
+		}
+	}
+	devs, err := ffmpeg.ListDevices(ctx, bin)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Device, len(devs))
+	for i, d := range devs {
+		out[i] = Device{Kind: d.Kind, Name: d.Name, Description: d.Description}
+	}
+	return out, nil
 }

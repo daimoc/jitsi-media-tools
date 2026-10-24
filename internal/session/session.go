@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"log/slog"
 	"sync"
@@ -169,10 +170,13 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 	}
 	s.sig = sig
 	s.setState(StateJoining, nil)
-	joinCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout)
+	joinCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout+cfg.WaitHost)
 	defer cancel()
 	if err := sig.Connect(joinCtx, cfg.DisplayName, &handler{Peer: p, s: s}); err != nil {
 		s.abort()
+		if s.State() == StateWaitingHost {
+			return nil, fmt.Errorf("timed out waiting for a host after %s: %w", cfg.WaitHost, err)
+		}
 		return nil, err
 	}
 	s.applySelection()
@@ -251,7 +255,7 @@ func (s *Session) signalConfig(m jitsi.Meeting) map[string]any {
 		"muc_domain":      m.MUC,
 		"websocket_url":   m.WebSocket,
 		"insecure":        s.cfg.Insecure,
-		"connect_timeout": s.cfg.ConnectTimeout.String(),
+		"connect_timeout": (s.cfg.ConnectTimeout + s.cfg.WaitHost).String(),
 	}
 	if m.Focus != "" {
 		c["focus_jid"] = m.Focus
@@ -406,7 +410,17 @@ type handler struct {
 	s *Session
 }
 
-var _ signaling.RoomObserver = (*handler)(nil)
+var (
+	_ signaling.RoomObserver = (*handler)(nil)
+	_ signaling.HostWaiter   = (*handler)(nil)
+)
+
+func (h *handler) OnWaitingForHost() {
+	h.s.setState(StateWaitingHost, nil)
+	if h.s.cfg.OnWaitingHost != nil {
+		h.s.cfg.OnWaitingHost()
+	}
+}
 
 func (h *handler) OnOccupant(o signaling.Occupant) {
 	evs := h.s.reg.occupant(o)

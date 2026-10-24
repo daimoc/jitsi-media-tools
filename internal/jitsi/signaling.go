@@ -94,6 +94,7 @@ type SignalingClient struct {
 	joinErr  error         // Written before joinDone is closed
 
 	lostOnce sync.Once
+	hostOnce sync.Once   // OnWaitingForHost called
 	onLost   func(error) // Called (in its own goroutine) when the connection is lost after joining
 
 	mu       sync.RWMutex
@@ -371,6 +372,16 @@ func (s *SignalingClient) requestConference(ctx context.Context, session *xmpp.S
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			var se stanza.Error
+			if errors.As(err, &se) && se.Condition == stanza.NotAuthorized {
+				// Secure domain: a guest may not start the conference; it
+				// waits for an authenticated host, asking again like
+				// jitsi-meet does (research R12).
+				if !s.waitForHost(ctx) {
+					return fmt.Errorf("%w: not allowed to start the conference and no host came", ErrAuthFailed)
+				}
+				continue
+			}
 			return fmt.Errorf("%w: %v", ErrFocusUnavailable, err)
 		}
 		if resp.Ready == "true" {
@@ -383,6 +394,32 @@ func (s *SignalingClient) requestConference(ctx context.Context, session *xmpp.S
 			return fmt.Errorf("%w: conference not ready: %v", ErrFocusUnavailable, ctx.Err())
 		case <-time.After(delay):
 		}
+	}
+}
+
+// hostRetry is how often a guest asks again for a conference only a host
+// may start.
+var hostRetry = 5 * time.Second
+
+// waitForHost tells the handler (once) that the guest waits for a host, then
+// waits hostRetry; it reports false when ctx ends first.
+func (s *SignalingClient) waitForHost(ctx context.Context) bool {
+	s.mu.RLock()
+	handler := s.handler
+	s.mu.RUnlock()
+	w, ok := handler.(signaling.HostWaiter)
+	if !ok {
+		return false // Nobody to tell: not a guest waiting for a host
+	}
+	s.hostOnce.Do(func() {
+		s.logger.Info("Waiting for a host to start the conference")
+		w.OnWaitingForHost()
+	})
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(hostRetry):
+		return true
 	}
 }
 

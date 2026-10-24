@@ -128,7 +128,7 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 **Independent Test**: quickstart scenario 5.
 
-- [ ] T047 [P] [US4] Test `internal/output/feeds_test.go`: port assignment — grid on BasePort, participants BasePort+1… in order of first selection, same port after leave/rejoin with the same unique name, at most MaxFeeds (default 16), `feeds.json` content `{"grid": "srt://host:9000", "Alice": "srt://host:9001"}`
+- [X] T047 [P] [US4] Test `internal/output/feeds_test.go`: port assignment — grid on BasePort, participants BasePort+1… in order of first selection, same port after leave/rejoin with the same unique name, at most MaxFeeds (default 16), `feeds.json` content `{"grid": "srt://host:9000", "Alice": "srt://host:9001"}`
 - [ ] T048 [P] [US4] Test `internal/ffmpeg/srt_test.go` (needs ffmpeg with srt): an output to `srt://127.0.0.1:P?mode=listener` is readable by a second ffmpeg caller; when the caller leaves, the supervised output restarts and accepts a new caller
 - [ ] T049 [US4] Implement OBS input in `internal/ffmpeg/encoder.go`: `OBSInput{Protocol: srt|rtmp, Listen}` → `-i srt://ADDR?mode=listener` or `-listen 1 -i rtmp://ADDR/live/obs`; supervised so OBS can reconnect; placeholder while no stream (FR-010); `jmt.OBSSource`; CLI `--publish obs-srt::PORT|obs-rtmp::PORT`; print `obs input <url>`
 - [ ] T050 [US4] Implement `internal/output/feeds.go`: per participant feed = constant-rate tile stream (latest frame repeated, name card when no video, silence when no audio) at 1280x720 (pinned high-res) or 640x360, encoded `-c:v libx264 -preset veryfast -tune zerolatency -g 60 -c:a aac -f mpegts srt://HOST:PORT?mode=listener&latency=120000`, supervised (T012), fed through drop-oldest queues; grid feed from the compositor when `Grid`; `FeedReady` events and stdout lines `feed NAME srt://host:port` (FR-017, FR-018)
@@ -142,10 +142,10 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 **Independent Test**: quickstart scenario 4.
 
-- [ ] T052 [P] [US5] Test `internal/jitsi/guest_test.go`: with `anonymousdomain` set and no token, SASL ANONYMOUS against that domain; conference IQ answered `ready='false'` or `not-authorized` → retry every 5 s, `OnWaitingForHost` fired once, joined when ready, error "timed out waiting for host" after `WaitHost` (golden IQs)
-- [ ] T053 [P] [US5] Test JWT paths in `internal/jitsi/jwt_test.go` (copied tests + new): ready token from `--jwt`, from URL `?jwt=`, signed from AppID/AppSecret with audience/subject/TTL/moderator; rejected auth → error containing "authentication failed"
-- [ ] T054 [US5] Implement guest login and wait-for-host retry in `internal/jitsi/signaling.go` / `internal/jitsi/guest.go`; `WaitingForHost` event and session state `waiting_host`; CLI `--wait-host`
-- [ ] T055 [US5] Map auth errors to "authentication failed" in `internal/jitsi`; CLI `--jwt` / `$JITSI_JWT`, `--jwt-app-id` + `$JITSI_APP_SECRET`, `--jwt-audience`, `--jwt-subject`, `--jwt-ttl`, `--jwt-moderator`; server override flags `--domain --muc --anonymous-domain --ws --focus`
+- [X] T052 [P] [US5] Test `internal/jitsi/guest_test.go`: with `anonymousdomain` set and no token, SASL ANONYMOUS against that domain; conference IQ answered `ready='false'` or `not-authorized` → retry every 5 s, `OnWaitingForHost` fired once, joined when ready, error "timed out waiting for host" after `WaitHost` (golden IQs)
+- [X] T053 [P] [US5] Test JWT paths in `internal/jitsi/jwt_test.go` (copied tests + new): ready token from `--jwt`, from URL `?jwt=`, signed from AppID/AppSecret with audience/subject/TTL/moderator; rejected auth → error containing "authentication failed"
+- [X] T054 [US5] Implement guest login and wait-for-host retry in `internal/jitsi/signaling.go` / `internal/jitsi/guest.go`; `WaitingForHost` event and session state `waiting_host`; CLI `--wait-host`
+- [X] T055 [US5] Map auth errors to "authentication failed" in `internal/jitsi`; CLI `--jwt` / `$JITSI_JWT`, `--jwt-app-id` + `$JITSI_APP_SECRET`, `--jwt-audience`, `--jwt-subject`, `--jwt-ttl`, `--jwt-moderator`; server override flags `--domain --muc --anonymous-domain --ws --focus`
 - [ ] T056 [US5] Hand check: join a real deployment as guest with only its URL; if the server refuses a guest for lack of SSRC rewriting or visitor support, record it in `checklists/validation.md` and open a follow-up feature (do not implement here, R12); commit
 
 ---
@@ -168,8 +168,8 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 **Independent Test**: quickstart scenario 7.
 
-- [ ] T060 [P] [US7] Tests `internal/ffmpeg/devices_test.go` on recorded listings in `internal/ffmpeg/testdata/devices/{linux-v4l2.txt,linux-pactl.txt,darwin-avfoundation.txt,windows-dshow.txt}` (parsers are OS-independent, so all run on every OS)
-- [ ] T061 [US7] Implement listing parsers `internal/ffmpeg/devices_parse.go` and per-OS dispatch `devices_linux.go` (`/sys/class/video4linux/*/name` + `pactl list short sources`, ALSA fallback; input `-f v4l2 -i /dev/videoN`, `-f pulse -i <source>`), `devices_darwin.go` (`-f avfoundation -list_devices true -i ""`; input `-f avfoundation -i "<video>:<audio>"`), `devices_windows.go` (`-f dshow -list_devices true -i dummy`; input `-f dshow -i video="<v>":audio="<a>"`)
+- [X] T060 [P] [US7] Tests `internal/ffmpeg/devices_test.go` on recorded listings in `internal/ffmpeg/testdata/devices/{linux-v4l2.txt,linux-pactl.txt,darwin-avfoundation.txt,windows-dshow.txt}` (parsers are OS-independent, so all run on every OS)
+- [X] T061 [US7] Implement listing parsers `internal/ffmpeg/devices_parse.go` and per-OS dispatch `devices_linux.go` (`/sys/class/video4linux/*/name` + `pactl list short sources`, ALSA fallback; input `-f v4l2 -i /dev/videoN`, `-f pulse -i <source>`), `devices_darwin.go` (`-f avfoundation -list_devices true -i ""`; input `-f avfoundation -i "<video>:<audio>"`), `devices_windows.go` (`-f dshow -list_devices true -i dummy`; input `-f dshow -i video="<v>":audio="<a>"`)
 - [ ] T062 [US7] `jmt.ListDevices`, `jmt.DeviceSource`; unknown device → error listing available ones before joining; CLI `devices` subcommand and `--publish device:VIDEO,AUDIO`; hand check on Linux (scenario 7); commit
 
 ---
@@ -180,7 +180,7 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 **Independent Test**: quickstart scenario 8.
 
-- [ ] T063 [P] [US8] Test `internal/session/selection_test.go`: policy → `ReceivePolicy` (`LastN = Limit`; pinned participants' video source names in `Selected` and `OnStage`; `DefaultMaxHeight = Height`; `MaxHeights[pinSource] = PinHeight`); pins matched case-insensitively, re-applied on join/rename; more pins than Limit → first Limit kept + one warning; re-sent on change
+- [X] T063 [P] [US8] Test `internal/session/selection_test.go`: policy → `ReceivePolicy` (`LastN = Limit`; pinned participants' video source names in `Selected` and `OnStage`; `DefaultMaxHeight = Height`; `MaxHeights[pinSource] = PinHeight`); pins matched case-insensitively, re-applied on join/rename; more pins than Limit → first Limit kept + one warning; re-sent on change
 - [ ] T064 [US8] Implement `internal/session/selection.go` and `Session.SetSelection`; decoders restarted at the new height when a participant's requested height changes; tile order from dominant-speaker events (T017); display, recording and feeds share the one selection (FR-013)
 - [ ] T065 [US8] CLI `--video-limit --video-height --pin (repeatable) --pin-height`; hand check scenario 8 with 20 load-engine bots; record CPU and the 30-minute run (SC-005) in `checklists/validation.md`; commit
 
