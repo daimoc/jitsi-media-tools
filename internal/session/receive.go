@@ -1,0 +1,337 @@
+package session
+
+import (
+	"encoding/binary"
+	"fmt"
+	"log/slog"
+	"sync"
+	"time"
+
+	"github.com/pion/rtp"
+
+	"github.com/daimoc/jitsi-media-tools/internal/compose"
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
+	"github.com/daimoc/jitsi-media-tools/internal/output"
+	"github.com/daimoc/jitsi-media-tools/internal/peer"
+	"github.com/daimoc/jitsi-media-tools/internal/rtpmedia"
+)
+
+// receiveNeeds are the ffmpeg parts receiving uses; VP9 and H.264 are
+// optional (a participant sending them gets a name card, with a warning).
+var receiveNeeds = []string{"decoder:vp8", "decoder:opus"}
+
+// Grid size and receive timing.
+const (
+	gridWidth, gridHeight = 1280, 720
+	// pipeIdle is how long a track goes without packets before its decoder
+	// stops (muted, or left out by the bridge): idle tracks cost nothing.
+	pipeIdle = 10 * time.Second
+	// restartDelay is how long a track waits before replacing a decoder
+	// that failed.
+	restartDelay = time.Second
+)
+
+// DisplayOptions shows the room in a window (needs ffplay).
+type DisplayOptions struct{ Title string }
+
+// receives reports whether the session decodes what it receives: only when
+// something consumes it.
+func (c *Config) receives() bool {
+	return c.Display != nil || c.OnGrid != nil || c.OnMix != nil
+}
+
+// receiver decodes the received tracks into the room and drives the
+// outputs from its clocks (research R7, R10).
+type receiver struct {
+	m       *media
+	room    *compose.Room
+	display *output.Display
+
+	mu    sync.Mutex
+	known map[string]bool // Participant ids in the room
+}
+
+func newReceiver(m *media) *receiver {
+	return &receiver{m: m, room: compose.NewRoom(gridWidth, gridHeight, m.s.cfg.Selection.Limit), known: map[string]bool{}}
+}
+
+// start opens the outputs and starts the clocks, once joined.
+func (r *receiver) start() error {
+	s := r.m.s
+	if d := s.cfg.Display; d != nil {
+		title := d.Title
+		if title == "" {
+			title = s.room
+		}
+		disp, err := output.StartDisplay(s.ctx, output.DisplayConfig{
+			FFmpeg: r.m.tools.ffmpeg, FFplay: r.m.tools.ffplay, Title: title,
+			Width: gridWidth, Height: gridHeight, Logger: s.logger,
+		})
+		if err != nil {
+			return fmt.Errorf("display: %w", err)
+		}
+		r.display = disp
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			select {
+			case <-disp.Done():
+			case <-s.ctx.Done():
+				return
+			}
+			// The window was closed: the user is done with the session.
+			s.logger.Info("Display closed; leaving", slog.Any("reason", disp.Err()))
+			go s.Close()
+		}()
+	}
+	r.sync()
+	s.wg.Add(2)
+	go func() {
+		defer s.wg.Done()
+		compose.Clock(s.ctx, compose.VideoInterval, r.videoTick)
+	}()
+	go func() {
+		defer s.wg.Done()
+		mix := make([]int16, compose.ChunkSamples)
+		compose.Clock(s.ctx, compose.AudioInterval, func(now time.Time) { r.audioTick(mix, now) })
+	}()
+	return nil
+}
+
+func (r *receiver) videoTick(now time.Time) {
+	g := r.room.VideoTick(now)
+	if r.display != nil {
+		r.display.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))))
+	}
+	if f := r.m.s.cfg.OnGrid; f != nil {
+		f(g, now)
+	}
+}
+
+func (r *receiver) audioTick(mix []int16, now time.Time) {
+	r.room.AudioTick(mix, nil)
+	if r.display != nil {
+		r.display.WriteAudio(pcmBytes(mix))
+	}
+	if f := r.m.s.cfg.OnMix; f != nil {
+		f(mix, now)
+	}
+}
+
+// sync makes the room's participants follow the registry.
+func (r *receiver) sync() {
+	parts := r.m.s.reg.list()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := map[string]bool{}
+	for _, p := range parts {
+		now[p.ID] = true
+		r.room.SetParticipant(p.ID, p.Name, p.Pinned, p.LastSpoke)
+	}
+	for id := range r.known {
+		if !now[id] {
+			r.room.Remove(id)
+		}
+	}
+	r.known = now
+}
+
+func (r *receiver) setLimit(n int) { r.room.SetLimit(n) }
+
+func (r *receiver) stop() {
+	if r.display != nil {
+		r.display.Stop()
+	}
+}
+
+// track decodes one received track until it ends.
+func (r *receiver) track(t *peer.RemoteTrack) {
+	s := r.m.s
+	format, err := rtpmedia.Format(t.MimeType)
+	if err != nil {
+		s.warnOnce("codec:"+t.MimeType, "Cannot decode "+t.MimeType+"; the sender's tile shows a name card")
+		drain(t)
+		return
+	}
+	p := &pipe{r: r, t: t, format: format}
+	stopWatch := make(chan struct{})
+	defer close(stopWatch)
+	go p.watch(stopWatch)
+	defer p.stopDecoder()
+	for {
+		pkt, err := t.ReadRTP()
+		if err != nil {
+			return
+		}
+		p.push(pkt)
+	}
+}
+
+// drain reads a track that is not decoded until it ends.
+func drain(t *peer.RemoteTrack) {
+	for {
+		if _, err := t.ReadRTP(); err != nil {
+			return
+		}
+	}
+}
+
+// pipe is one received track's decoding: RTP → receiver → ffmpeg decoder →
+// the room. The decoder exists while packets come.
+type pipe struct {
+	r      *receiver
+	t      *peer.RemoteTrack
+	format string
+	owner  string
+
+	mu     sync.Mutex
+	dec    *ffmpeg.Decoder
+	rx     *rtpmedia.Receiver
+	last   time.Time // Last packet
+	failed time.Time // Last decoder failure
+}
+
+// push hands a packet to the decoder, starting one when needed.
+func (p *pipe) push(pkt *rtp.Packet) {
+	s := p.r.m.s
+	if p.owner == "" {
+		src, ok := s.reg.source(p.t.SSRC)
+		if !ok || src.Owner == "" {
+			return // Not announced yet: nobody to show it for
+		}
+		p.owner = src.Owner
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	now := time.Now()
+	p.last = now
+	if p.dec == nil {
+		if now.Sub(p.failed) < restartDelay || !p.startLocked() {
+			return
+		}
+	}
+	if err := p.rx.Push(pkt); err != nil {
+		s.logger.Debug("Decoder input failed", slog.String("kind", p.t.Kind), slog.String("error", err.Error()))
+		p.failed = now
+		p.stopLocked()
+	}
+}
+
+// startLocked starts a decoder for the track.
+func (p *pipe) startLocked() bool {
+	s := p.r.m.s
+	cfg := ffmpeg.DecoderConfig{Bin: p.r.m.tools.ffmpeg, Format: p.format, Logger: s.logger}
+	var (
+		dec *ffmpeg.Decoder
+		err error
+	)
+	if p.t.Kind == peer.KindVideo {
+		cfg.Height = s.cfg.Selection.Height
+		if part := s.reg.get(p.owner); part != nil && part.Pinned {
+			cfg.Height = s.cfg.Selection.PinHeight
+		}
+		dec, err = ffmpeg.StartVideoDecoder(s.ctx, cfg)
+	} else {
+		dec, err = ffmpeg.StartAudioDecoder(s.ctx, cfg)
+	}
+	if err == nil {
+		p.rx, err = rtpmedia.NewReceiver(p.t.MimeType, dec)
+	}
+	if err != nil {
+		s.warnOnce("decoder:"+p.t.MimeType, "Cannot start a decoder for "+p.t.MimeType+": "+err.Error())
+		if dec != nil {
+			dec.Stop()
+		}
+		p.failed = time.Now()
+		return false
+	}
+	ssrc := p.t.SSRC
+	p.rx.NeedKeyframe = func() { s.peer.RequestKeyframe(ssrc) }
+	p.dec = dec
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		p.consume(dec)
+	}()
+	return true
+}
+
+// consume moves decoded frames into the room until the decoder ends.
+func (p *pipe) consume(dec *ffmpeg.Decoder) {
+	s := p.r.m.s
+	if p.t.Kind == peer.KindVideo {
+		first := true
+		for buf := range dec.Frames() {
+			p.r.room.PushVideo(p.owner, compose.FrameFrom(dec.Width(), dec.Height(), buf), time.Now())
+			if first {
+				first = false
+				p.selected(true)
+			}
+		}
+		p.selected(false)
+	} else {
+		for buf := range dec.Frames() {
+			p.r.room.PushAudio(p.owner, pcmSamples(buf))
+		}
+	}
+	<-dec.Done()
+	if err := dec.Err(); err != nil && s.ctx.Err() == nil {
+		s.logger.Debug("Decoder exited", slog.String("kind", p.t.Kind), slog.String("error", err.Error()))
+	}
+}
+
+// selected records whether the owner's video is being received.
+func (p *pipe) selected(on bool) {
+	if e, ok := p.r.m.s.reg.setSelected(p.owner, on); ok {
+		p.r.m.s.emit(e)
+	}
+}
+
+// watch stops the decoder of a track that went idle.
+func (p *pipe) watch(stop <-chan struct{}) {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+			p.mu.Lock()
+			if p.dec != nil && time.Since(p.last) > pipeIdle {
+				p.stopLocked()
+			}
+			p.mu.Unlock()
+		}
+	}
+}
+
+func (p *pipe) stopDecoder() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.stopLocked()
+}
+
+func (p *pipe) stopLocked() {
+	if p.dec != nil {
+		p.dec.Stop()
+		p.dec, p.rx = nil, nil
+	}
+}
+
+// pcmSamples reads s16le samples.
+func pcmSamples(b []byte) []int16 {
+	s := make([]int16, len(b)/2)
+	for i := range s {
+		s[i] = int16(binary.LittleEndian.Uint16(b[2*i:]))
+	}
+	return s
+}
+
+// pcmBytes writes samples as s16le.
+func pcmBytes(s []int16) []byte {
+	b := make([]byte, 2*len(s))
+	for i, v := range s {
+		binary.LittleEndian.PutUint16(b[2*i:], uint16(v))
+	}
+	return b
+}

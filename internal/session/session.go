@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/daimoc/jitsi-media-tools/internal/compose"
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 	"github.com/daimoc/jitsi-media-tools/internal/jitsi"
 	"github.com/daimoc/jitsi-media-tools/internal/peer"
@@ -49,8 +50,15 @@ type Config struct {
 	FFmpegNeeds    []string // ffmpeg parts the session's media needs (ffmpeg.Need*)
 	NeedFFplay     bool
 
-	Publish   *Publish  // Nil: publish nothing
-	Selection Selection // Which video to receive
+	Publish   *Publish        // Nil: publish nothing
+	Selection Selection       // Which video to receive
+	Display   *DisplayOptions // Nil: no window
+
+	// OnGrid gets the composed grid at 30 fps and OnMix the room's mix
+	// every 20 ms (ChunkSamples); buffers are valid during the call only,
+	// and the calls must not block.
+	OnGrid func(f *compose.Frame, at time.Time)
+	OnMix  func(samples []int16, at time.Time)
 
 	Logger  *slog.Logger
 	OnEvent func(Event)                  // Participant events; must not block
@@ -181,6 +189,13 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 		return nil, err
 	}
 	s.applySelection()
+	if err := s.media.joined(); err != nil {
+		if derr := sig.Disconnect(cfg.DisplayName); derr != nil {
+			s.logger.Debug("Disconnect", slog.String("error", derr.Error()))
+		}
+		s.abort()
+		return nil, err
+	}
 	s.setState(StateJoined, nil)
 	s.logger.Info("Joined room", slog.String("room", s.room), slog.String("name", cfg.DisplayName))
 	return s, nil
@@ -190,7 +205,10 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 // them.
 func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	var t tools
-	if len(s.cfg.FFmpegNeeds) == 0 && s.cfg.Publish == nil && !s.cfg.NeedFFplay {
+	if s.cfg.Display != nil {
+		s.cfg.NeedFFplay = true
+	}
+	if len(s.cfg.FFmpegNeeds) == 0 && s.cfg.Publish == nil && !s.cfg.NeedFFplay && !s.cfg.receives() {
 		return t, nil
 	}
 	bin, err := ffmpeg.Locate("ffmpeg", s.cfg.FFmpeg)
@@ -204,6 +222,9 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	needs := s.cfg.FFmpegNeeds
 	if s.cfg.Publish != nil {
 		needs = append(slices.Clone(needs), publishNeeds...)
+	}
+	if s.cfg.receives() {
+		needs = append(slices.Clone(needs), receiveNeeds...)
 	}
 	if err := caps.Missing(needs...); err != nil {
 		return t, err
@@ -430,12 +451,8 @@ func (h *handler) OnWaitingForHost() {
 func (h *handler) OnOccupant(o signaling.Occupant) {
 	evs := h.s.reg.occupant(o)
 	h.s.emit(evs...)
-	for _, e := range evs {
-		if e.Kind == EventLeft {
-			h.s.media.participantLeft(e.Participant)
-		}
-	}
 	if len(evs) > 0 {
+		h.s.media.participantsChanged()
 		h.s.applySelection()
 	}
 }

@@ -25,10 +25,23 @@ type media struct {
 	s     *Session
 	tools tools
 	pub   *publisher // Nil when publishing nothing
+	recv  *receiver  // Nil when nothing consumes received media
 }
 
 func newMedia(s *Session, t tools) *media {
-	return &media{s: s, tools: t}
+	m := &media{s: s, tools: t}
+	if s.cfg.receives() {
+		m.recv = newReceiver(m)
+	}
+	return m
+}
+
+// joined starts the receive outputs once in the room.
+func (m *media) joined() error {
+	if m.recv != nil {
+		return m.recv.start()
+	}
+	return nil
 }
 
 // prepare checks the publish source before joining.
@@ -68,18 +81,46 @@ func (m *media) publishHeight() int {
 	return 0
 }
 
-func (m *media) onTrack(t *peer.RemoteTrack) {}
-func (m *media) onKeyframeRequest()          {}
+func (m *media) onTrack(t *peer.RemoteTrack) {
+	s := m.s
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		if m.recv == nil {
+			drain(t)
+			return
+		}
+		m.recv.track(t)
+	}()
+}
+func (m *media) onKeyframeRequest() {}
 func (m *media) onConnected() {
 	if m.pub != nil {
 		m.pub.start()
 	}
 }
 
-func (m *media) participantLeft(p Participant) {}
-func (m *media) speakersChanged()              {}
-func (m *media) selectionChanged()             {}
-func (m *media) stop()                         {}
+// participantsChanged follows joins, leaves, renames and pins.
+func (m *media) participantsChanged() {
+	if m.recv != nil {
+		m.recv.sync()
+	}
+}
+
+func (m *media) speakersChanged() { m.participantsChanged() }
+
+func (m *media) selectionChanged() {
+	if m.recv != nil {
+		m.recv.setLimit(m.s.cfg.Selection.Limit)
+		m.recv.sync()
+	}
+}
+
+func (m *media) stop() {
+	if m.recv != nil {
+		m.recv.stop()
+	}
+}
 
 // Address is something the session listens on.
 type Address struct{ Label, URL string }

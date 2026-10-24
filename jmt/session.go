@@ -58,6 +58,9 @@ func (o Options) sessionConfig() (session.Config, error) {
 	if o.Publish != nil {
 		cfg.Publish = o.Publish.publish()
 	}
+	if o.Display != nil {
+		cfg.Display = &session.DisplayOptions{Title: o.Display.Title}
+	}
 	return cfg, nil
 }
 
