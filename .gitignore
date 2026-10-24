@@ -1,0 +1,11 @@
+/recordings/
+/jitsi-media-tools
+*.exe
+*.test
+*.out
+vendor/
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/

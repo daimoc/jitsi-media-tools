@@ -19,14 +19,14 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create `go.mod` (module `github.com/daimoc/jitsi-media-tools`, `go 1.23.0`), `.gitignore` (`/recordings/`, `/jitsi-media-tools`, `*.exe`), `LICENSE` copied from `LE/LICENSE`, and empty `README.md`
-- [ ] T002 Copy `LE/src/platform/platform.go` (and any other non-test file of `LE/src/platform/*.go`) to `internal/signaling/` as `package signaling`, keeping `SignalingHandler`, `DataChannel`, `DataChannelHandler`, `TrickleFunc`; drop `PlatformAdapter`/`PublishSessionAdapter` if unused after T003
-- [ ] T003 Copy `LE/src/platform/jitsi/` (all `.go`, `_test.go`, `testdata/`) to `internal/jitsi/` and `LE/src/platform/internal/jwt/` to `internal/jitsi/jwt/`; rewrite imports to `internal/signaling` and `internal/jitsi/jwt`; set `botIdentity` name to `jitsi-media-tools`; replace the multi-bot `Adapter` with a single-client constructor `jitsi.NewClient(logger, Config)` (keep `JingleConfig` fields as `Config`); `go test ./internal/jitsi/...` green
-- [ ] T004 [P] Copy RFC 7675 consent checks `LE/src/execution/consent.go` (+ test) and TWCC `LE/src/execution/twcc.go` (+ test) to `internal/peer/` as `package peer`, removing imports of scenario/metrics/hostload; tests green
-- [ ] T005 [P] Copy IVF and Ogg parsers (`parseIVF`, `parseOgg`, `isVP8Keyframe`, `Frame`) from `LE/src/media/content.go` and RTP pacing/packetizing from `LE/src/media/source.go` (keep the 2^30 initial RTP timestamp and its comment) to `internal/rtpmedia/` with their tests, removing embedded assets, layers and `SendTimes` measurement
-- [ ] T006 [P] Write import-boundary test `internal/boundary_test.go` using `go/build` (or `go list -deps -json`): `internal/jitsi`, `internal/signaling` must not import `internal/{rtpmedia,ffmpeg,compose,output,peer}`; `internal/{rtpmedia,ffmpeg,compose,output}` must not import `internal/{jitsi,signaling}`; `cmd/...` must import only `jmt` from this module
-- [ ] T007 [P] Add CI `.github/workflows/ci.yml`: matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; Go 1.23.x; install ffmpeg (`apt-get install -y ffmpeg`, `brew install ffmpeg`, `choco install ffmpeg -y`); run `go vet ./...` and `go test -race ./...`
-- [ ] T008 Commit setup: `go mod tidy`, `go vet ./... && go test -race ./...` green
+- [X] T001 Create `go.mod` (module `github.com/daimoc/jitsi-media-tools`, `go 1.23.0`), `.gitignore` (`/recordings/`, `/jitsi-media-tools`, `*.exe`), `LICENSE` copied from `LE/LICENSE`, and empty `README.md`
+- [X] T002 Copy `LE/src/platform/platform.go` (and any other non-test file of `LE/src/platform/*.go`) to `internal/signaling/` as `package signaling`, keeping `SignalingHandler`, `DataChannel`, `DataChannelHandler`, `TrickleFunc`; drop `PlatformAdapter`/`PublishSessionAdapter` if unused after T003
+- [X] T003 (kept the copied `Adapter`, used with one peer id, to stay close to the origin and keep its fake-server tests) Copy `LE/src/platform/jitsi/` (all `.go`, `_test.go`, `testdata/`) to `internal/jitsi/` and `LE/src/platform/internal/jwt/` to `internal/jitsi/jwt/`; rewrite imports to `internal/signaling` and `internal/jitsi/jwt`; set `botIdentity` name to `jitsi-media-tools`; replace the multi-bot `Adapter` with a single-client constructor `jitsi.NewClient(logger, Config)` (keep `JingleConfig` fields as `Config`); `go test ./internal/jitsi/...` green
+- [X] T004 [P] Copy RFC 7675 consent checks `LE/src/execution/consent.go` (+ test) and TWCC `LE/src/execution/twcc.go` (+ test) to `internal/peer/` as `package peer`, removing imports of scenario/metrics/hostload; tests green
+- [X] T005 [P] Copy IVF and Ogg parsers (`parseIVF`, `parseOgg`, `isVP8Keyframe`, `Frame`) from `LE/src/media/content.go` and RTP pacing/packetizing from `LE/src/media/source.go` (keep the 2^30 initial RTP timestamp and its comment) to `internal/rtpmedia/` with their tests, removing embedded assets, layers and `SendTimes` measurement
+- [X] T006 [P] Write import-boundary test `internal/boundary_test.go` using `go/build` (or `go list -deps -json`): `internal/jitsi`, `internal/signaling` must not import `internal/{rtpmedia,ffmpeg,compose,output,peer}`; `internal/{rtpmedia,ffmpeg,compose,output}` must not import `internal/{jitsi,signaling}`; `cmd/...` must import only `jmt` from this module
+- [X] T007 [P] Add CI `.github/workflows/ci.yml`: matrix `ubuntu-latest`, `macos-latest`, `windows-latest`; Go 1.23.x; install ffmpeg (`apt-get install -y ffmpeg`, `brew install ffmpeg`, `choco install ffmpeg -y`); run `go vet ./...` and `go test -race ./...`
+- [X] T008 Commit setup: `go mod tidy`, `go vet ./... && go test -race ./...` green
 
 ---
 
@@ -41,7 +41,7 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 ### Peer (R2, R7)
 
-- [ ] T013 Test then implement `internal/peer/peer.go` from `LE/src/execution/{pion,peer}.go`: `New(Config{Logger})` building a Pion API with VP8, VP9, H264 (packetization-mode=1) and Opus registered, TWCC + NACK + RTCP reports interceptors, consent; implements `signaling.SignalingHandler` (OnOffer → answer with trickle, OnICECandidate, OpenDataChannel, Renegotiate, OnSignalingLost); `AddSendTrack(kind) (*webrtc.TrackLocalStaticRTP, error)`; `OnTrack(func(RemoteTrack))` where `RemoteTrack{Kind, Codec, SSRC, SourceName, ReadRTP}`; `RequestKeyframe(ssrc)`; no stats/metrics; tests with two in-process peers (`LE/src/execution/peer_test.go` style)
+- [X] T013 Test then implement `internal/peer/peer.go` from `LE/src/execution/{pion,peer}.go`: `New(Config{Logger})` building a Pion API with VP8, VP9, H264 (packetization-mode=1) and Opus registered, TWCC + NACK + RTCP reports interceptors, consent; implements `signaling.SignalingHandler` (OnOffer → answer with trickle, OnICECandidate, OpenDataChannel, Renegotiate, OnSignalingLost); `AddSendTrack(kind) (*webrtc.TrackLocalStaticRTP, error)`; `OnTrack(func(RemoteTrack))` where `RemoteTrack{Kind, Codec, SSRC, SourceName, ReadRTP}`; `RequestKeyframe(ssrc)`; no stats/metrics; tests with two in-process peers (`LE/src/execution/peer_test.go` style)
 
 ### Connection settings and session skeleton (R12, R9)
 
