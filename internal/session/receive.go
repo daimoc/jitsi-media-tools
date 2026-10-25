@@ -49,8 +49,11 @@ type receiver struct {
 	sinks   sinks
 
 	mu    sync.Mutex
-	known map[string]bool // Participant ids in the room
+	known map[string]bool // Tile ids in the room: participants and screen shares
 }
+
+// screenTile is the tile id of a participant's screen share.
+func screenTile(id string) string { return id + "#screen" }
 
 func newReceiver(m *media) *receiver {
 	r := &receiver{m: m, room: compose.NewRoom(gridWidth, gridHeight, m.s.cfg.Selection.Limit), known: map[string]bool{}}
@@ -141,15 +144,21 @@ func (r *receiver) audioTick(mix []int16, now time.Time) {
 	deliverAudio(&r.sinks.mix, "", mix, now)
 }
 
-// sync makes the room's participants follow the registry.
+// sync makes the room's tiles follow the registry: one per participant,
+// and one per screen share.
 func (r *receiver) sync() {
-	parts := r.m.s.reg.list()
+	parts, screens := r.m.s.reg.list(), r.m.s.reg.screens()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := map[string]bool{}
 	for _, p := range parts {
 		now[p.ID] = true
 		r.room.SetParticipant(p.ID, p.Name, p.Pinned, p.LastSpoke)
+		if screens[p.ID] {
+			id := screenTile(p.ID)
+			now[id] = true
+			r.room.SetParticipant(id, p.Name+" (screen)", p.Pinned, p.LastSpoke)
+		}
 	}
 	for id := range r.known {
 		if !now[id] {
@@ -200,6 +209,7 @@ type pipe struct {
 	r     *receiver
 	t     *peer.RemoteTrack
 	owner string
+	tile  string // Room tile the video goes to: the owner's, or their screen share's
 	// The codec being decoded: a sender may switch codec (a browser sends
 	// AV1 until it reads our codec list), and the decoder follows.
 	mime   string
@@ -220,7 +230,10 @@ func (p *pipe) push(pkt *rtp.Packet) {
 		if !ok || src.Owner == "" {
 			return // Not announced yet: nobody to show it for
 		}
-		p.owner = src.Owner
+		p.owner, p.tile = src.Owner, src.Owner
+		if src.Desktop {
+			p.tile = screenTile(src.Owner)
+		}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -300,14 +313,19 @@ func (p *pipe) consume(dec *ffmpeg.Decoder) {
 		first := true
 		for buf := range dec.Frames() {
 			f, now := compose.FrameFrom(dec.Width(), dec.Height(), buf), time.Now()
-			p.r.room.PushVideo(p.owner, f, now)
+			p.r.room.PushVideo(p.tile, f, now)
+			if p.tile != p.owner {
+				continue // A screen share: its own tile only
+			}
 			deliverVideo(&p.r.sinks.video, p.owner, f, now)
 			if first {
 				first = false
 				p.selected(true)
 			}
 		}
-		p.selected(false)
+		if p.tile == p.owner {
+			p.selected(false)
+		}
 	} else {
 		for buf := range dec.Frames() {
 			p.r.room.PushAudio(p.owner, pcmSamples(buf))

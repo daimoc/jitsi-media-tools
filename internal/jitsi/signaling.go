@@ -570,7 +570,9 @@ func (p *mucPresence) occupant(id string) signaling.Occupant {
 	}
 	if p.SourceInfo != "" && json.Unmarshal([]byte(p.SourceInfo), &info) == nil && len(info) > 0 {
 		o.AudioMuted, o.VideoMuted = true, true
+		o.SourceMuted = make(map[string]bool, len(info))
 		for name, si := range info {
+			o.SourceMuted[name] = si.Muted
 			i := strings.LastIndex(name, "-")
 			if i < 0 || i+1 >= len(name) {
 				continue

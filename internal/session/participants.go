@@ -51,11 +51,12 @@ type registry struct {
 	byID   map[string]*Participant
 	pins   []string // Lower-cased
 	srcs   map[uint32]signaling.RemoteSource
+	muted  map[string]map[string]bool // Participant id -> SourceMuted of their last presence
 	joined int
 }
 
 func newRegistry() *registry {
-	return &registry{byID: map[string]*Participant{}, srcs: map[uint32]signaling.RemoteSource{}}
+	return &registry{byID: map[string]*Participant{}, srcs: map[uint32]signaling.RemoteSource{}, muted: map[string]map[string]bool{}}
 }
 
 // uniqueName returns base, or base (2), (3)... for the first one no other
@@ -98,12 +99,18 @@ func (r *registry) occupant(o signaling.Occupant) []Event {
 			return nil
 		}
 		delete(r.byID, o.ID)
+		delete(r.muted, o.ID)
 		for ssrc, s := range r.srcs {
 			if s.Owner == o.ID {
 				delete(r.srcs, ssrc)
 			}
 		}
 		return []Event{{EventLeft, *p}}
+	}
+	if o.SourceMuted == nil {
+		delete(r.muted, o.ID)
+	} else {
+		r.muted[o.ID] = o.SourceMuted
 	}
 	display := o.DisplayName
 	if display == "" {
@@ -185,17 +192,42 @@ func (r *registry) source(ssrc uint32) (signaling.RemoteSource, bool) {
 	return s, ok
 }
 
-// videoSource returns the name of a participant's video source ("" if none).
+// videoSource returns the name of a participant's camera, or of their
+// screen share if it is their only video ("" if none).
 func (r *registry) videoSource(id string) string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	best := ""
+	best, desktop := "", false
 	for _, s := range r.srcs {
-		if s.Owner == id && s.Kind == "video" && (best == "" || s.Name < best) {
-			best = s.Name
+		if s.Owner != id || s.Kind != "video" {
+			continue
+		}
+		if best == "" || desktop && !s.Desktop || desktop == s.Desktop && s.Name < best {
+			best, desktop = s.Name, s.Desktop
 		}
 	}
 	return best
+}
+
+// screens returns the participants sharing their screen: a negotiated
+// desktop source that their presence, when it lists sources, announces
+// unmuted (lib-jitsi-meet keeps the source of a stopped share, muted).
+func (r *registry) screens() map[string]bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := map[string]bool{}
+	for _, s := range r.srcs {
+		if !s.Desktop || s.Owner == "" {
+			continue
+		}
+		if m, ok := r.muted[s.Owner]; ok {
+			if muted, listed := m[s.Name]; !listed || muted {
+				continue
+			}
+		}
+		out[s.Owner] = true
+	}
+	return out
 }
 
 // get returns a copy of a participant (nil if absent).

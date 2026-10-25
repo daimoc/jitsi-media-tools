@@ -81,3 +81,39 @@ func TestRegistry_PinsSpeakersSources(t *testing.T) {
 		t.Errorf("video source of a: %q", name)
 	}
 }
+
+func TestRegistry_ScreensAndCamera(t *testing.T) {
+	r := newRegistry()
+	r.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice"})
+	r.sources([]signaling.RemoteSource{
+		{SSRC: 5, Kind: "video", Name: "a-v0", Owner: "a"},
+		{SSRC: 6, Kind: "video", Name: "a-v1", Owner: "a", Desktop: true},
+		{SSRC: 7, Kind: "video", Name: "b-v0", Owner: "b"},
+	})
+	if got := r.screens(); len(got) != 1 || !got["a"] {
+		t.Errorf("screens %v, want a", got)
+	}
+	// The share stops: the source stays negotiated, muted in presence.
+	r.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice", SourceMuted: map[string]bool{"a-v0": false, "a-v1": true}})
+	if got := r.screens(); len(got) != 0 {
+		t.Errorf("screens after the share %v, want none", got)
+	}
+	// It starts again.
+	r.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice", SourceMuted: map[string]bool{"a-v0": false, "a-v1": false}})
+	if got := r.screens(); !got["a"] {
+		t.Errorf("screens after sharing again %v, want a", got)
+	}
+	// A presence announcing sources but not this one: no share.
+	r.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice", SourceMuted: map[string]bool{"a-v0": false}})
+	if got := r.screens(); len(got) != 0 {
+		t.Errorf("screens without the source in presence %v, want none", got)
+	}
+	// The pinned source stays the camera, even when the screen sorts first.
+	r.sources([]signaling.RemoteSource{
+		{SSRC: 6, Kind: "video", Name: "a-v0", Owner: "a", Desktop: true},
+		{SSRC: 5, Kind: "video", Name: "a-v1", Owner: "a"},
+	})
+	if name := r.videoSource("a"); name != "a-v1" {
+		t.Errorf("video source of a: %q, want the camera a-v1", name)
+	}
+}

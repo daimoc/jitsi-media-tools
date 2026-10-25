@@ -333,8 +333,9 @@ follow the speakers, and a pinned participant stays shown when others talk.
   the library.
 - Hand testing happens on Linux with the local server at `https://localhost:8443`; Windows and
   macOS are covered by automated tests only until machines are available.
-- Screen sharing from other participants is treated as their video if it is their only video; a
-  separate screen-share tile is out of scope.
+- Screen sharing from another participant gets its own tile, named "<name> (screen)", next to
+  their camera tile and counted in the video limit (revised 2026-10-25: one tile per participant
+  showed the camera and the screen share in turn). Library video callbacks carry the camera only.
 - Chat, moderation, lobby management, breakout rooms and end-to-end encrypted meetings are out of
   scope.
 - The project is independent of `webrtc-load-engine` and starts from a copy of its Jitsi signaling.

@@ -106,3 +106,49 @@ func TestReceive_NoConsumerStartsNoDecoder(t *testing.T) {
 		t.Errorf("%d processes running with nothing consuming", n)
 	}
 }
+
+func TestReceive_ScreenShareHasItsOwnTile(t *testing.T) {
+	s := &Session{reg: newRegistry()}
+	r := &receiver{m: &media{s: s}, room: compose.NewRoom(gridWidth, gridHeight, 9), known: map[string]bool{}}
+	s.reg.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice"})
+	s.reg.sources([]signaling.RemoteSource{
+		{SSRC: 5, Kind: "video", Name: "a-v0", Owner: "a"},
+		{SSRC: 6, Kind: "video", Name: "a-v1", Owner: "a", Desktop: true},
+	})
+	r.sync()
+	names := func() map[string]string {
+		out := map[string]string{}
+		for _, tl := range r.room.Tiles(time.Now()) {
+			out[tl.ID] = tl.Name
+		}
+		return out
+	}
+	if got := names(); len(got) != 2 || got["a"] != "Alice" || got[screenTile("a")] != "Alice (screen)" {
+		t.Errorf("tiles %v, want Alice and Alice (screen)", got)
+	}
+	// Frames of the two streams land on their own tiles.
+	r.room.PushVideo("a", compose.NewFrame(4, 4), time.Now())
+	r.room.PushVideo(screenTile("a"), compose.NewFrame(8, 8), time.Now())
+	for _, tl := range r.room.Tiles(time.Now()) {
+		if want := map[string]int{"a": 4, screenTile("a"): 8}[tl.ID]; tl.Frame == nil || tl.Frame.W != want {
+			t.Errorf("tile %s frame %+v, want width %d", tl.ID, tl.Frame, want)
+		}
+	}
+	// The share stops: the source stays, muted in presence; its tile goes.
+	s.reg.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice", SourceMuted: map[string]bool{"a-v0": false, "a-v1": true}})
+	r.sync()
+	if got := names(); len(got) != 1 || got["a"] != "Alice" {
+		t.Errorf("tiles after the share %v, want Alice only", got)
+	}
+	// Shared again, then the source goes.
+	s.reg.occupant(signaling.Occupant{ID: "a", DisplayName: "Alice", SourceMuted: map[string]bool{"a-v0": false, "a-v1": false}})
+	r.sync()
+	if got := names(); len(got) != 2 {
+		t.Errorf("tiles when sharing again %v, want 2", got)
+	}
+	s.reg.sources([]signaling.RemoteSource{{SSRC: 5, Kind: "video", Name: "a-v0", Owner: "a"}})
+	r.sync()
+	if got := names(); len(got) != 1 || got["a"] != "Alice" {
+		t.Errorf("tiles after the share %v, want Alice only", got)
+	}
+}

@@ -454,8 +454,8 @@ func (h *handler) OnWaitingForHost() {
 func (h *handler) OnOccupant(o signaling.Occupant) {
 	evs := h.s.reg.occupant(o)
 	h.s.emit(evs...)
+	h.s.media.participantsChanged() // Also a screen share starting or stopping
 	if len(evs) > 0 {
-		h.s.media.participantsChanged()
 		h.s.applySelection()
 	}
 }
@@ -463,6 +463,7 @@ func (h *handler) OnOccupant(o signaling.Occupant) {
 func (h *handler) OnRemoteSources(list []signaling.RemoteSource) {
 	h.s.reg.sources(list)
 	h.s.applySelection()
+	h.s.media.participantsChanged() // Screen shares come and go with their sources
 }
 
 func (h *handler) OnDominantSpeaker(id string, previous []string) {

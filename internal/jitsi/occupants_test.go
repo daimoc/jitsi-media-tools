@@ -28,14 +28,23 @@ func TestPresence_Occupant(t *testing.T) {
 	p := decodePresence(t, "alice.xml")
 	got := p.occupant("abcd1234")
 	// SourceInfo wins over the legacy <audiomuted>false</audiomuted>.
-	want := signaling.Occupant{ID: "abcd1234", DisplayName: "Alice", AudioMuted: true, VideoMuted: false}
-	if got != want {
+	want := signaling.Occupant{ID: "abcd1234", DisplayName: "Alice", AudioMuted: true, VideoMuted: false,
+		SourceMuted: map[string]bool{"abcd1234-a0": true, "abcd1234-v0": false}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	// A stopped screen share stays announced, muted.
+	p = decodePresence(t, "alice-screen-stopped.xml")
+	got = p.occupant("abcd1234")
+	want = signaling.Occupant{ID: "abcd1234", DisplayName: "Alice",
+		SourceMuted: map[string]bool{"abcd1234-a0": false, "abcd1234-v0": false, "abcd1234-v1": true}}
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 	p = decodePresence(t, "legacy-left.xml")
 	got = p.occupant("beef0001")
 	want = signaling.Occupant{ID: "beef0001", DisplayName: "Bob", AudioMuted: true, Left: true}
-	if got != want {
+	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
 	}
 }
@@ -95,11 +104,13 @@ func TestSessionSources_RemoteSources(t *testing.T) {
 		{content: "video", src: &remoteSource{owner: "abcd1234", primary: "111", sources: []Source{{SSRC: "111", Name: "abcd1234-v0"}}}},
 		{content: "audio", src: &remoteSource{primary: "222", sources: []Source{{SSRC: "222", Name: "beef0001-a0"}}}},
 		{content: "audio", src: nil},
+		{content: "video", src: &remoteSource{owner: "abcd1234", primary: "333", sources: []Source{{SSRC: "333", Name: "abcd1234-v1", VideoType: "desktop"}}}},
 	}}
 	got := ss.remoteSources()
 	want := []signaling.RemoteSource{
 		{SSRC: 111, Kind: "video", Name: "abcd1234-v0", Owner: "abcd1234"},
 		{SSRC: 222, Kind: "audio", Name: "beef0001-a0", Owner: "beef0001"}, // Owner from the name
+		{SSRC: 333, Kind: "video", Name: "abcd1234-v1", Owner: "abcd1234", Desktop: true},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v\nwant %+v", got, want)

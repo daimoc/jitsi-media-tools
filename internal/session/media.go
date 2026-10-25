@@ -100,7 +100,7 @@ func (m *media) onConnected() {
 	}
 }
 
-// participantsChanged follows joins, leaves, renames and pins.
+// participantsChanged follows joins, leaves, renames, pins and screen shares.
 func (m *media) participantsChanged() {
 	if m.recv != nil {
 		m.recv.sync()

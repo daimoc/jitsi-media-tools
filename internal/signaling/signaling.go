@@ -110,6 +110,10 @@ type Occupant struct {
 	AudioMuted  bool
 	VideoMuted  bool
 	Left        bool // Unavailable presence: the occupant left
+	// SourceMuted is the mute state of each source the occupant announces
+	// (source name -> muted); nil when the presence has no SourceInfo. A
+	// stopped screen share stays negotiated, muted here.
+	SourceMuted map[string]bool
 }
 
 // RemoteSource is a stream another participant sends, as negotiated.
@@ -118,6 +122,8 @@ type RemoteSource struct {
 	Kind  string // "audio" or "video"
 	Name  string // Source name, e.g. "abcd1234-v0" ("" if unnamed)
 	Owner string // Endpoint id of the sender ("" if unknown)
+	// Desktop marks a screen share (Jitsi videoType "desktop").
+	Desktop bool
 }
 
 // RoomObserver may be implemented by a SignalingHandler to follow the room:

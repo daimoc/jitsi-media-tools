@@ -231,7 +231,7 @@ func (ss *sessionSources) remoteSources() []signaling.RemoteSource {
 		}
 		for _, src := range sec.src.sources {
 			if src.SSRC == sec.src.primary {
-				rs.Name = src.Name
+				rs.Name, rs.Desktop = src.Name, src.VideoType == "desktop"
 				break
 			}
 		}
