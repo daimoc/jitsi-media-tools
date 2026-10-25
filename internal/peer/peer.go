@@ -63,6 +63,10 @@ type RemoteTrack struct {
 	track    *webrtc.TrackRemote
 }
 
+// Codec returns the track's current codec (e.g. "video/VP8"): a sender
+// may switch codec, and the codec changes with the packets read.
+func (t *RemoteTrack) Codec() string { return t.track.Codec().MimeType }
+
 // ReadRTP reads the next packet; it fails once the track or the connection
 // ends.
 func (t *RemoteTrack) ReadRTP() (*rtp.Packet, error) {

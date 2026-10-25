@@ -451,7 +451,8 @@ func TestAdapter_AnnouncesSentSources(t *testing.T) {
 	c.result(accept)
 }
 
-// A receive-only bot announces no source.
+// A receive-only bot announces no source: an empty SourceInfo (which makes
+// lib-jitsi-meet read its codec list) and no mute state.
 func TestAdapter_ReceiveOnlyAnnouncesNoSources(t *testing.T) {
 	srv := newFakeXMPPServer(t)
 	a := newTestAdapter(t, srv, nil)
@@ -461,7 +462,7 @@ func TestAdapter_ReceiveOnlyAnnouncesNoSources(t *testing.T) {
 	c := srv.accept()
 	c.answerConference(true)
 	join := c.expectJoin("peer1")
-	if strings.Contains(join.Inner, "SourceInfo") || strings.Contains(join.Inner, "muted") {
+	if !strings.Contains(join.Inner, "<SourceInfo>{}</SourceInfo>") || strings.Contains(join.Inner, "muted") {
 		t.Errorf("receive-only join must not announce sources, got %s", join.Inner)
 	}
 	c.confirmJoin()

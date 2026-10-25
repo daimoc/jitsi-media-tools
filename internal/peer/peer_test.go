@@ -3,6 +3,9 @@ package peer
 import (
 	"io"
 	"log/slog"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -130,4 +133,97 @@ func TestPeer_StreamIDIsUnique(t *testing.T) {
 	if a.LocalTrack(KindAudio).StreamID() != a.LocalTrack(KindVideo).StreamID() {
 		t.Error("one peer's audio and video are in different streams")
 	}
+}
+
+// rawTrack is a remote video track that writes packets with a chosen
+// payload type, as the bridge forwards a sender that switches codec.
+type rawTrack struct {
+	mu     sync.Mutex
+	ssrc   uint32
+	w      webrtc.TrackLocalWriter
+	codecs []webrtc.RTPCodecParameters
+}
+
+func (r *rawTrack) Bind(c webrtc.TrackLocalContext) (webrtc.RTPCodecParameters, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ssrc, r.w, r.codecs = uint32(c.SSRC()), c.WriteStream(), c.CodecParameters()
+	return r.codecs[0], nil
+}
+func (r *rawTrack) Unbind(webrtc.TrackLocalContext) error { return nil }
+func (r *rawTrack) ID() string                            { return "video" }
+func (r *rawTrack) RID() string                           { return "" }
+func (r *rawTrack) StreamID() string                      { return "remote" }
+func (r *rawTrack) Kind() webrtc.RTPCodecType             { return webrtc.RTPCodecTypeVideo }
+
+// write sends a packet of the codec mime, if negotiated.
+func (r *rawTrack) write(mime string, seq uint16) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.w == nil {
+		return false
+	}
+	for _, c := range r.codecs {
+		if strings.EqualFold(c.MimeType, mime) {
+			r.w.WriteRTP(&rtp.Header{Version: 2, SSRC: r.ssrc, PayloadType: uint8(c.PayloadType), SequenceNumber: seq, Timestamp: uint32(seq) * 3000, Marker: true}, []byte{0x10, 0, 0, 0})
+			return true
+		}
+	}
+	return false
+}
+
+// TestPeer_TrackSurvivesCodecSwitch checks that a track whose first packets
+// are AV1 (a browser before it reads the codec list) still fires OnTrack,
+// and reports the new codec once the sender switches to VP8.
+func TestPeer_TrackSurvivesCodecSwitch(t *testing.T) {
+	p := newTestPeer(t)
+	gotTrack := make(chan *RemoteTrack, 1)
+	p.OnTrack(func(rt *RemoteTrack) { gotTrack <- rt })
+	remote, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { remote.Close() })
+	raw := &rawTrack{}
+	if _, err := remote.AddTrack(raw); err != nil {
+		t.Fatal(err)
+	}
+	connect(t, remote, p)
+	stop := make(chan struct{})
+	defer close(stop)
+	var switched atomic.Bool
+	go func() {
+		for seq := uint16(0); ; seq++ {
+			select {
+			case <-stop:
+				return
+			case <-time.After(10 * time.Millisecond):
+			}
+			mime := webrtc.MimeTypeAV1
+			if switched.Load() {
+				mime = webrtc.MimeTypeVP8
+			}
+			raw.write(mime, seq)
+		}
+	}()
+	var rt *RemoteTrack
+	select {
+	case rt = <-gotTrack:
+	case <-time.After(10 * time.Second):
+		t.Fatal("no track for a stream starting with AV1")
+	}
+	if rt.Codec() != webrtc.MimeTypeAV1 {
+		t.Errorf("codec %s, want AV1", rt.Codec())
+	}
+	switched.Store(true)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := rt.ReadRTP(); err != nil {
+			t.Fatal(err)
+		}
+		if rt.Codec() == webrtc.MimeTypeVP8 {
+			return
+		}
+	}
+	t.Error("codec switch to VP8 not seen")
 }

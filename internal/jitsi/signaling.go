@@ -445,6 +445,12 @@ func occupantNick(local jid.JID) string {
 	return fmt.Sprintf("%08x", rand.Uint32())
 }
 
+// receivedVideoCodecs is the codec list announced in presence:
+// lib-jitsi-meet senders choose, among their preferred codecs, one every
+// participant lists, and ignore participants without a list (they would
+// then send AV1, which the tool does not receive: research R7).
+const receivedVideoCodecs = "vp8,vp9,h264"
+
 // mucJoinPresence builds the XEP-0045 join request, with the display name
 // (XEP-0172) shown to the other participants and the entity capabilities
 // (XEP-0115) Jicofo uses to select what to offer:
@@ -456,7 +462,10 @@ func mucJoinPresence(occupantJID, displayName string, sources xml.TokenReader) x
 	nick := xmlstream.Wrap(xmlstream.Token(xml.CharData(displayName)), xml.StartElement{
 		Name: xml.Name{Space: nsNick, Local: "nick"},
 	})
-	children := []xml.TokenReader{mucX, nick, capsElement()}
+	codecs := xmlstream.Wrap(xmlstream.Token(xml.CharData(receivedVideoCodecs)), xml.StartElement{
+		Name: xml.Name{Local: "jitsi_participant_codecList"},
+	})
+	children := []xml.TokenReader{mucX, nick, capsElement(), codecs}
 	if sources != nil {
 		children = append(children, sources)
 	}
@@ -471,11 +480,10 @@ func mucJoinPresence(occupantJID, displayName string, sources xml.TokenReader) x
 // sourcesPresence returns the presence extensions with which lib-jitsi-meet
 // announces a participant's sources and their mute state: <SourceInfo> (a
 // JSON map by source name, used with source-name signaling) and the legacy
-// <audiomuted>/<videomuted>. Nil when nothing is sent.
+// <audiomuted>/<videomuted>. A participant sending nothing announces an
+// empty <SourceInfo>: lib-jitsi-meet reads the codec list only from
+// participants whose presence has one.
 func sourcesPresence(nick string, kinds []string) xml.TokenReader {
-	if len(kinds) == 0 {
-		return nil
-	}
 	type sourceInfo struct {
 		Muted     bool   `json:"muted"`
 		VideoType string `json:"videoType,omitempty"`

@@ -38,8 +38,10 @@ var (
 var videoFeedback = []webrtc.RTCPFeedback{{Type: "goog-remb"}, {Type: "ccm", Parameter: "fir"}, {Type: "nack"}, {Type: "nack", Parameter: "pli"}}
 
 // registerCodecs registers what the peer can receive and send: Opus, and
-// VP8, VP9 and H.264 video (research R7; AV1 is not offered, so the room's
-// senders never pick it for us).
+// VP8, VP9 and H.264 video (research R7). AV1 is registered but not
+// decoded: a browser may send it before it reads the codec list in our
+// presence, and Pion drops for good a track whose first packet has an
+// unknown payload type.
 func registerCodecs(m *webrtc.MediaEngine) error {
 	video := []webrtc.RTPCodecParameters{
 		{RTPCodecCapability: VP8Codec, PayloadType: 96},
@@ -47,6 +49,7 @@ func registerCodecs(m *webrtc.MediaEngine) error {
 		{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f", RTCPFeedback: videoFeedback}, PayloadType: 102},
 		{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42001f", RTCPFeedback: videoFeedback}, PayloadType: 127},
 		{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, SDPFmtpLine: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=640032", RTCPFeedback: videoFeedback}, PayloadType: 112},
+		{RTPCodecCapability: webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1, ClockRate: 90000, RTCPFeedback: videoFeedback}, PayloadType: 45},
 	}
 	for _, c := range video {
 		if err := m.RegisterCodec(c, webrtc.RTPCodecTypeVideo); err != nil {

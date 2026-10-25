@@ -146,14 +146,7 @@ func (r *receiver) stop() {
 
 // track decodes one received track until it ends.
 func (r *receiver) track(t *peer.RemoteTrack) {
-	s := r.m.s
-	format, err := rtpmedia.Format(t.MimeType)
-	if err != nil {
-		s.warnOnce("codec:"+t.MimeType, "Cannot decode "+t.MimeType+"; the sender's tile shows a name card")
-		drain(t)
-		return
-	}
-	p := &pipe{r: r, t: t, format: format}
+	p := &pipe{r: r, t: t}
 	stopWatch := make(chan struct{})
 	defer close(stopWatch)
 	go p.watch(stopWatch)
@@ -161,6 +154,7 @@ func (r *receiver) track(t *peer.RemoteTrack) {
 	for {
 		pkt, err := t.ReadRTP()
 		if err != nil {
+			r.m.s.logger.Debug("Track ended", slog.String("kind", t.Kind), slog.Uint64("ssrc", uint64(t.SSRC)), slog.String("error", err.Error()))
 			return
 		}
 		p.push(pkt)
@@ -179,10 +173,13 @@ func drain(t *peer.RemoteTrack) {
 // pipe is one received track's decoding: RTP → receiver → ffmpeg decoder →
 // the room. The decoder exists while packets come.
 type pipe struct {
-	r      *receiver
-	t      *peer.RemoteTrack
-	format string
-	owner  string
+	r     *receiver
+	t     *peer.RemoteTrack
+	owner string
+	// The codec being decoded: a sender may switch codec (a browser sends
+	// AV1 until it reads our codec list), and the decoder follows.
+	mime   string
+	format string // "" when the codec cannot be decoded
 
 	mu     sync.Mutex
 	dec    *ffmpeg.Decoder
@@ -205,6 +202,18 @@ func (p *pipe) push(pkt *rtp.Packet) {
 	defer p.mu.Unlock()
 	now := time.Now()
 	p.last = now
+	if mime := p.t.Codec(); mime != p.mime {
+		s.logger.Debug("Track codec", slog.String("owner", p.owner), slog.String("codec", mime))
+		p.stopLocked()
+		p.mime = mime
+		var err error
+		if p.format, err = rtpmedia.Format(mime); err != nil {
+			s.warnOnce("codec:"+mime, "Cannot decode "+mime+"; the sender's tile shows a name card until they switch codec")
+		}
+	}
+	if p.format == "" {
+		return
+	}
 	if p.dec == nil {
 		if now.Sub(p.failed) < restartDelay || !p.startLocked() {
 			return
@@ -235,10 +244,10 @@ func (p *pipe) startLocked() bool {
 		dec, err = ffmpeg.StartAudioDecoder(s.ctx, cfg)
 	}
 	if err == nil {
-		p.rx, err = rtpmedia.NewReceiver(p.t.MimeType, dec)
+		p.rx, err = rtpmedia.NewReceiver(p.mime, dec)
 	}
 	if err != nil {
-		s.warnOnce("decoder:"+p.t.MimeType, "Cannot start a decoder for "+p.t.MimeType+": "+err.Error())
+		s.warnOnce("decoder:"+p.mime, "Cannot start a decoder for "+p.mime+": "+err.Error())
 		if dec != nil {
 			dec.Stop()
 		}
