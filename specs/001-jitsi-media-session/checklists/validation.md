@@ -28,3 +28,30 @@ Found and fixed during the check:
 Noted, not fixed: the browser's peer-to-peer offer, which the tool declines, is followed by a
 `transport-info` that the tool logs as an error ("Rejected Jingle IQ … unknown session"); it
 is harmless and should be logged at debug level.
+
+## Scenario 2: Show the room (US2, T041)
+
+Date: 2026-10-25. Commit: aff984b.
+
+```bash
+jitsi-media-tools join --url https://localhost:8443/IntriguingClimatesSupposeProbably \
+  --insecure --name Viewer --display
+```
+
+Two browser tabs in the room ("ssds" and "ssds (2)"), camera and microphone on.
+
+- [x] The window shows one tile per tab, with its camera video and its name; their audio is heard.
+- [x] Camera off in one tab: about 2 s later its tile shows the name card.
+- [x] A tab leaving: its tile and decoders went away when its presence left (target 5 s).
+- [x] Closing the window: the tool left the room and exited with code 0.
+- [x] Live test `TestLive_ReceiveGrid` passes (2.4 s).
+
+Found and fixed during the check (aff984b):
+
+- The browsers sent AV1, which the tool does not decode: the server's `config.js` prefers AV1
+  and the tool listed no codecs. It now announces `vp8,vp9,h264` in its presence.
+- The browsers ignored that list: lib-jitsi-meet reads it only from a participant whose
+  presence has `<SourceInfo>`. The tool now always sends one (`{}` when it publishes nothing).
+- Pion dropped a track for good when its first packets used an unregistered codec (AV1 before
+  the switch). AV1 is now registered, and each receive pipe restarts its decoder when the
+  track's codec changes. The browsers switched from AV1 to VP9 within 0.3 s.

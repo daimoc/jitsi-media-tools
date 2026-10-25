@@ -104,7 +104,7 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 - [X] T038 [US2] Wire reception in `internal/session/receive.go`: on `OnTrack` map SSRC → participant (T018); start a video decoder only for selected participants (bridge decides, R8; initial `SetReceive{LastN: Limit, DefaultMaxHeight: Height}`); start audio decoders on first packet and stop after 10 s without packets; feed compositor and mixer; tiles follow joins/leaves within 5 s
 - [X] T039 [US2] Implement `internal/output/display.go`: one ffmpeg reading grid raw video (stdin, `-f rawvideo -pix_fmt yuv420p -s 1280x720 -r 30`) and mixed audio (loopback, `-f s16le -ar 48000 -ac 2`) and writing `-c:v rawvideo -c:a pcm_s16le -f nut pipe:1`, piped into `ffplay -fflags nobuffer -flags low_delay -framedrop -window_title <title> -`; consumers fed through bounded drop-oldest queues (`internal/output/queue.go`, test first)
 - [X] T040 [US2] `jmt.Options.Display` and CLI `--display`; ffplay required only then (probe message names ffplay)
-- [ ] T041 [US2] Live test `tests/live/receive_test.go`: session A publishes testsrc2; session B with a grid callback sees a tile named after A within 5 s and non-silent mixed audio (SC-002); hand check quickstart scenario 2; commit
+- [X] T041 [US2] Live test `tests/live/receive_test.go`: session A publishes testsrc2; session B with a grid callback sees a tile named after A within 5 s and non-silent mixed audio (SC-002); hand check quickstart scenario 2; commit
 
 ---
 
