@@ -130,4 +130,3 @@ func TestLive_PublishFile(t *testing.T) {
 	}
 	t.Fatalf("after 10 s: %d audio, %d video packets", rx.count(peer.KindAudio), rx.count(peer.KindVideo))
 }
-

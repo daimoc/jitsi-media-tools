@@ -72,7 +72,7 @@ func makeClip(t *testing.T, seconds string) string {
 func TestPublish_FileOnceSendsBothKindsThenCloses(t *testing.T) {
 	clip := makeClip(t, "1.5")
 	c := newBridgeCounter()
-	useFake(t, &fakeSignal{setup: c.setup})
+	useFake(t, &fakeSignal{Setup: c.setup})
 	var col collected
 	s, err := Start(context.Background(), col.config(Config{
 		MeetingURL: "https://meet.test/Room", DisplayName: "Clip",
@@ -107,7 +107,7 @@ func TestPublish_FileOnceSendsBothKindsThenCloses(t *testing.T) {
 func TestPublish_LoopKeepsSending(t *testing.T) {
 	clip := makeClip(t, "1")
 	c := newBridgeCounter()
-	useFake(t, &fakeSignal{setup: c.setup})
+	useFake(t, &fakeSignal{Setup: c.setup})
 	var col collected
 	s, err := Start(context.Background(), col.config(Config{
 		MeetingURL: "https://meet.test/Room", DisplayName: "Loop",
@@ -163,7 +163,7 @@ func TestPublish_MissingFileFailsBeforeJoining(t *testing.T) {
 	if err == nil {
 		t.Fatal("no error for a missing file")
 	}
-	if f.handler != nil {
+	if f.Handler() != nil {
 		t.Error("joined despite the missing file")
 	}
 }

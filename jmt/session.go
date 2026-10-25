@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
+	"github.com/daimoc/jitsi-media-tools/internal/compose"
 	"github.com/daimoc/jitsi-media-tools/internal/session"
 )
 
@@ -54,6 +56,7 @@ func (o Options) sessionConfig() (session.Config, error) {
 		WaitHost: o.WaitHost, FFmpeg: o.FFmpeg, FFplay: o.FFplay,
 		Selection: session.Selection(o.Selection),
 		Logger:    o.Logger,
+		Receive:   true, // OnVideo and the others come after Join
 	}
 	if o.Publish != nil {
 		cfg.Publish = o.Publish.publish()
@@ -93,6 +96,49 @@ func (s *Session) Participants() []Participant {
 		out = append(out, participantFrom(p))
 	}
 	return out
+}
+
+// OnVideo sets the function that gets each selected participant's decoded
+// video, at the size the selection asks for (nil stops it). Callbacks run on
+// session goroutines, one per callback: a slow one loses frames and delays
+// nothing else. The frame's buffers are valid during the call only.
+// Received video is decoded only while OnVideo, OnGrid or a display
+// consumes it.
+func (s *Session) OnVideo(f func(VideoFrame)) {
+	var g session.VideoFunc
+	if f != nil {
+		g = func(id string, fr *compose.Frame, at time.Time) { f(videoFrame(id, fr, at)) }
+	}
+	s.s.SetOnVideo(g)
+}
+
+// OnGrid sets the function that gets the composed tile grid (1280x720) at
+// 30 fps, ParticipantID "", under the rules of OnVideo.
+func (s *Session) OnGrid(f func(VideoFrame)) {
+	var g session.VideoFunc
+	if f != nil {
+		g = func(id string, fr *compose.Frame, at time.Time) { f(videoFrame(id, fr, at)) }
+	}
+	s.s.SetOnGrid(g)
+}
+
+// OnAudio sets the function that gets each participant's audio, every
+// 20 ms, under the rules of OnVideo.
+func (s *Session) OnAudio(f func(AudioChunk)) { s.s.SetOnAudio(audioFunc(f)) }
+
+// OnMixedAudio sets the function that gets the room's mixed audio, every
+// 20 ms, ParticipantID "", under the rules of OnVideo.
+func (s *Session) OnMixedAudio(f func(AudioChunk)) { s.s.SetOnMix(audioFunc(f)) }
+
+func videoFrame(id string, f *compose.Frame, at time.Time) VideoFrame {
+	return VideoFrame{ParticipantID: id, Width: f.W, Height: f.H, Y: f.Y, U: f.U, V: f.V, Time: at}
+}
+
+func audioFunc(f func(AudioChunk)) session.AudioFunc {
+	if f == nil {
+		return nil
+	}
+	return func(id string, s []int16, at time.Time) { f(AudioChunk{ParticipantID: id, Samples: s, Time: at}) }
 }
 
 // SetSelection changes which video the session receives.

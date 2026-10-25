@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 	"github.com/daimoc/jitsi-media-tools/internal/peer"
@@ -35,6 +36,12 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 	}
 	if err := p.Input.check(); err != nil {
 		return err
+	}
+	if f := p.Input.Frames; p.Input.Kind == "frames" {
+		p.Audio, p.Video = f.Audio, f.Video
+		if f.Video {
+			p.Width, p.Height = f.W, f.H
+		}
 	}
 	if p.Input.Kind == "file" {
 		st, err := ffmpeg.FileStreams(ctx, m.tools.ffmpeg, p.Input.Path)
@@ -78,9 +85,12 @@ func (pb *publisher) start() {
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
-			if pb.pub.Input.Kind == "file" && !pb.pub.Input.Loop {
+			switch {
+			case pb.pub.Input.Kind == "file" && !pb.pub.Input.Loop:
 				pb.runOnce()
-			} else {
+			case pb.pub.Input.Kind == "frames":
+				pb.runFrames()
+			default:
 				ffmpeg.Supervise(s.ctx, s.logger, "encoder", pb.startEncoder, func(err error) {
 					if err != nil {
 						s.logger.Warn("Encoder stopped; sending a placeholder until it restarts", slog.String("error", err.Error()))
@@ -123,16 +133,68 @@ func (pb *publisher) runOnce() {
 	go s.Close()
 }
 
+// runFrames encodes what the program writes, restarting the encoder after
+// a failure, until the session or the frame source closes. Placeholders go
+// out meanwhile and afterwards.
+func (pb *publisher) runFrames() {
+	s, f := pb.m.s, pb.pub.Input.Frames
+	for {
+		p, err := pb.startEncoder(s.ctx)
+		if err == nil {
+			<-p.Done()
+			err = p.Err()
+		}
+		if s.ctx.Err() != nil || f.closed() {
+			return
+		}
+		if err != nil {
+			s.logger.Warn("Encoder stopped; sending a placeholder until it restarts", slog.String("error", err.Error()))
+		}
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-f.done:
+			return
+		case <-time.After(restartDelay):
+		}
+	}
+}
+
 // startEncoder starts one encoder run and forwards its frames until its
 // outputs end. The returned process is done once they have.
 func (pb *publisher) startEncoder(ctx context.Context) (*ffmpeg.Process, error) {
 	s := pb.m.s
-	enc, err := ffmpeg.StartEncoder(ctx, ffmpeg.EncoderConfig{
+	cfg := ffmpeg.EncoderConfig{
 		Bin: pb.m.tools.ffmpeg, Input: pb.pub.Input.Args, Logger: s.logger,
 		Options: ffmpeg.EncodeOptions{Audio: pb.pub.Audio, Video: pb.pub.Video, Width: pb.pub.Width, Height: pb.pub.Height},
-	})
+	}
+	var frames *framesRun
+	if pb.pub.Input.Kind == "frames" {
+		var err error
+		if frames, err = openFrames(pb.pub.Input.Frames); err != nil {
+			return nil, err
+		}
+		cfg.Input = frames.args
+		if frames.stdin != nil {
+			cfg.Stdin = frames.stdin
+		}
+	}
+	enc, err := ffmpeg.StartEncoder(ctx, cfg)
 	if err != nil {
+		if frames != nil {
+			frames.close()
+		}
 		return nil, err
+	}
+	if frames != nil {
+		// The feeders stop with this run, so that the next one gets the
+		// frames that follow.
+		runCtx, cancel := context.WithCancel(ctx)
+		go func() {
+			<-enc.Done()
+			cancel()
+		}()
+		frames.feed(runCtx, &s.wg)
 	}
 	var fwd sync.WaitGroup
 	forward := func(from <-chan rtpmedia.Frame, to chan<- rtpmedia.Frame) {

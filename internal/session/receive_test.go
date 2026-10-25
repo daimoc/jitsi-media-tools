@@ -2,156 +2,15 @@ package session
 
 import (
 	"context"
-	"errors"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/pion/webrtc/v3"
-	pionmedia "github.com/pion/webrtc/v3/pkg/media"
-	"github.com/pion/webrtc/v3/pkg/media/ivfreader"
-	"github.com/pion/webrtc/v3/pkg/media/oggreader"
-
 	"github.com/daimoc/jitsi-media-tools/internal/compose"
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
-	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
+	"github.com/daimoc/jitsi-media-tools/internal/session/sessiontest"
 	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
-
-// sendingBridge makes the fake bridge send a participant's VP8 and Opus,
-// encoded by ffmpeg, once connected.
-type sendingBridge struct {
-	t          *testing.T
-	f          *fakeSignal
-	ivf, ogg   string
-	owner      string
-	stop       chan struct{}
-	stopOnce   sync.Once
-	sendErrors chan error
-}
-
-func newSendingBridge(t *testing.T, f *fakeSignal, owner string) *sendingBridge {
-	bin := ffmpegtest.Require(t)
-	dir := t.TempDir()
-	b := &sendingBridge{t: t, f: f, owner: owner, ivf: filepath.Join(dir, "v.ivf"), ogg: filepath.Join(dir, "a.ogg"),
-		stop: make(chan struct{}), sendErrors: make(chan error, 2)}
-	run := func(args ...string) {
-		if out, err := exec.Command(bin, append([]string{"-hide_banner", "-loglevel", "error"}, args...)...).CombinedOutput(); err != nil {
-			t.Fatalf("ffmpeg: %v: %s", err, out)
-		}
-	}
-	run("-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=4", "-c:v", "libvpx", "-deadline", "realtime", "-g", "30", "-f", "ivf", b.ivf)
-	run("-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4", "-c:a", "libopus", "-frame_duration", "20", "-page_duration", "20000", "-f", "ogg", b.ogg)
-	t.Cleanup(func() { b.stopOnce.Do(func() { close(b.stop) }) })
-	return b
-}
-
-func (b *sendingBridge) setup(bridge *webrtc.PeerConnection) {
-	v, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", "alice")
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	a, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "audio", "alice")
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	vs, err := bridge.AddTrack(v)
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	as, err := bridge.AddTrack(a)
-	if err != nil {
-		b.t.Fatal(err)
-	}
-	b.f.sources = []signaling.RemoteSource{
-		{SSRC: uint32(vs.GetParameters().Encodings[0].SSRC), Kind: "video", Name: b.owner + "-v0", Owner: b.owner},
-		{SSRC: uint32(as.GetParameters().Encodings[0].SSRC), Kind: "audio", Name: b.owner + "-a0", Owner: b.owner},
-	}
-	var once sync.Once
-	bridge.OnConnectionStateChange(func(st webrtc.PeerConnectionState) {
-		if st == webrtc.PeerConnectionStateConnected {
-			once.Do(func() {
-				go b.sendVideo(v)
-				go b.sendAudio(a)
-			})
-		}
-	})
-}
-
-func (b *sendingBridge) sendVideo(tr *webrtc.TrackLocalStaticSample) {
-	f, err := os.Open(b.ivf)
-	if err != nil {
-		b.sendErrors <- err
-		return
-	}
-	defer f.Close()
-	r, _, err := ivfreader.NewWith(f)
-	if err != nil {
-		b.sendErrors <- err
-		return
-	}
-	tick := time.NewTicker(time.Second / 30)
-	defer tick.Stop()
-	for {
-		frame, _, err := r.ParseNextFrame()
-		if errors.Is(err, io.EOF) {
-			return
-		}
-		if err != nil {
-			b.sendErrors <- err
-			return
-		}
-		select {
-		case <-b.stop:
-			return
-		case <-tick.C:
-		}
-		if err := tr.WriteSample(pionmedia.Sample{Data: frame, Duration: time.Second / 30}); err != nil {
-			return
-		}
-	}
-}
-
-func (b *sendingBridge) sendAudio(tr *webrtc.TrackLocalStaticSample) {
-	f, err := os.Open(b.ogg)
-	if err != nil {
-		b.sendErrors <- err
-		return
-	}
-	defer f.Close()
-	r, _, err := oggreader.NewWith(f)
-	if err != nil {
-		b.sendErrors <- err
-		return
-	}
-	tick := time.NewTicker(20 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		page, _, err := r.ParseNextPage()
-		if errors.Is(err, io.EOF) {
-			return
-		}
-		if err != nil {
-			b.sendErrors <- err
-			return
-		}
-		if len(page) >= 8 && (string(page[:8]) == "OpusHead" || string(page[:8]) == "OpusTags") {
-			continue
-		}
-		select {
-		case <-b.stop:
-			return
-		case <-tick.C:
-		}
-		if err := tr.WriteSample(pionmedia.Sample{Data: page, Duration: 20 * time.Millisecond}); err != nil {
-			return
-		}
-	}
-}
 
 // watcher records what the grid and mix hooks see.
 type watcher struct {
@@ -190,10 +49,9 @@ func (w *watcher) state() (video, audible bool, grids int) {
 }
 
 func TestReceive_GridShowsVideoAndMixIsAudible(t *testing.T) {
-	f := &fakeSignal{occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
-	b := newSendingBridge(t, f, "alice1")
-	f.setup = b.setup
+	f := &fakeSignal{Occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
 	useFake(t, f)
+	b := sessiontest.NewSender(f, "alice1")
 	var w watcher
 	var col collected
 	s, err := Start(context.Background(), col.config(Config{
@@ -214,7 +72,7 @@ func TestReceive_GridShowsVideoAndMixIsAudible(t *testing.T) {
 	video, audible, grids := w.state()
 	if !video || !audible {
 		select {
-		case err := <-b.sendErrors:
+		case err := <-b.Errors:
 			t.Fatalf("bridge: %v", err)
 		default:
 		}
@@ -234,10 +92,9 @@ func TestReceive_GridShowsVideoAndMixIsAudible(t *testing.T) {
 }
 
 func TestReceive_NoConsumerStartsNoDecoder(t *testing.T) {
-	f := &fakeSignal{occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
-	b := newSendingBridge(t, f, "alice1")
-	f.setup = b.setup
+	f := &fakeSignal{Occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
 	useFake(t, f)
+	sessiontest.NewSender(f, "alice1")
 	var col collected
 	s, err := Start(context.Background(), col.config(Config{MeetingURL: "https://meet.test/Room", DisplayName: "Viewer"}))
 	if err != nil {

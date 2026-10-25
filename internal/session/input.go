@@ -12,6 +12,9 @@ type Input struct {
 	Args []string // ffmpeg input arguments (with -i)
 	Path string   // File inputs: checked before joining
 	Loop bool     // File inputs: play again at the end
+	// Frames is what a program writes (frames inputs); the encoder's raw
+	// inputs are opened per run.
+	Frames *Frames
 }
 
 // FileInput reads a media file in real time, once or looped.
@@ -25,6 +28,15 @@ func FileInput(path string, loop bool) Input {
 
 // check fails before joining when the input cannot work.
 func (in Input) check() error {
+	if in.Kind == "frames" {
+		f := in.Frames
+		if f == nil || !f.Audio && !f.Video {
+			return fmt.Errorf("frame source publishes nothing")
+		}
+		if f.Video && (f.W <= 0 || f.H <= 0) {
+			return fmt.Errorf("frame source size %dx%d", f.W, f.H)
+		}
+	}
 	if in.Kind == "file" {
 		info, err := os.Stat(in.Path)
 		if err != nil {

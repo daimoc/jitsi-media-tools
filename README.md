@@ -29,10 +29,10 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | List capture devices (`devices`) | Done |
 | Publish a camera and microphone (`device:`) | Not yet |
 | Publish an OBS stream (`obs-srt:`, `obs-rtmp:`) | Not yet |
-| Tile-grid window (`--display`) | Not yet |
+| Tile-grid window (`--display`) | Done |
 | Recording (`--record`) | Not yet |
 | SRT feeds for OBS (`--obs`, `--obs-grid`) | Not yet |
-| Decoded frames and samples in the library | Not yet |
+| Decoded frames and samples in the library | Done |
 
 The flags for the unfinished features are already parsed, but they do nothing yet.
 
@@ -134,6 +134,26 @@ return s.Wait()
 - `Participants()` lists the people in the room, and `SetSelection` changes which video
   the session receives.
 - Zero values in `Options` take the defaults described in [jmt/options.go](jmt/options.go).
+
+### Received media and your own frames
+
+```go
+s.OnVideo(func(f jmt.VideoFrame) { /* f.ParticipantID, f.Width×f.Height yuv420p in f.Y, f.U, f.V */ })
+s.OnGrid(func(f jmt.VideoFrame) { /* the tile grid, 1280x720 at 30 fps */ })
+s.OnAudio(func(c jmt.AudioChunk) { /* 20 ms of one participant: 48 kHz stereo, 1920 int16 */ })
+s.OnMixedAudio(func(c jmt.AudioChunk) { /* 20 ms of the room's mix */ })
+
+pub, src := jmt.FrameSource(640, 360, true, true) // Pass src as Options.Publish
+pub.WriteVideo(frame)                              // 640x360 yuv420p, at 30 fps
+pub.WriteAudio(chunk)                              // every 20 ms
+```
+
+- Each callback runs on its own goroutine. A slow callback loses frames but delays nothing
+  else. Buffers are valid only during the call, so copy what you keep. Pass `nil` to stop one.
+- Received video and audio are decoded only while a callback or the window uses them.
+- Write your frames in real time. While none come, the session sends black and silence.
+- [jmt/example_test.go](jmt/example_test.go) is a complete example: it publishes a moving
+  pattern and counts the frames received from each participant.
 
 ## Try it on a local Jitsi
 

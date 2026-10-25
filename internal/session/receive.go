@@ -34,10 +34,10 @@ const (
 // DisplayOptions shows the room in a window (needs ffplay).
 type DisplayOptions struct{ Title string }
 
-// receives reports whether the session decodes what it receives: only when
-// something consumes it.
+// receives reports whether the session can decode what it receives. Even
+// then, a kind is decoded only while something consumes it.
 func (c *Config) receives() bool {
-	return c.Display != nil || c.OnGrid != nil || c.OnMix != nil
+	return c.Receive || c.Display != nil || c.OnGrid != nil || c.OnMix != nil
 }
 
 // receiver decodes the received tracks into the room and drives the
@@ -46,13 +46,33 @@ type receiver struct {
 	m       *media
 	room    *compose.Room
 	display *output.Display
+	sinks   sinks
 
 	mu    sync.Mutex
 	known map[string]bool // Participant ids in the room
 }
 
 func newReceiver(m *media) *receiver {
-	return &receiver{m: m, room: compose.NewRoom(gridWidth, gridHeight, m.s.cfg.Selection.Limit), known: map[string]bool{}}
+	r := &receiver{m: m, room: compose.NewRoom(gridWidth, gridHeight, m.s.cfg.Selection.Limit), known: map[string]bool{}}
+	r.sinks.ctx = m.s.ctx
+	if f := m.s.cfg.OnGrid; f != nil {
+		setVideoSink(r.sinks.ctx, &r.sinks.grid, func(_ string, g *compose.Frame, at time.Time) { f(g, at) })
+	}
+	if f := m.s.cfg.OnMix; f != nil {
+		setAudioSink(r.sinks.ctx, &r.sinks.mix, func(_ string, s []int16, at time.Time) { f(s, at) })
+	}
+	return r
+}
+
+// wants reports whether something consumes received media of a kind.
+func (r *receiver) wants(kind string) bool {
+	if r.m.s.cfg.Display != nil { // Set before any track; r.display comes later
+		return true
+	}
+	if kind == peer.KindVideo {
+		return r.sinks.video.Load() != nil || r.sinks.grid.Load() != nil
+	}
+	return r.sinks.audio.Load() != nil || r.sinks.mix.Load() != nil
 }
 
 // start opens the outputs and starts the clocks, once joined.
@@ -99,23 +119,26 @@ func (r *receiver) start() error {
 }
 
 func (r *receiver) videoTick(now time.Time) {
+	if r.display == nil && r.sinks.grid.Load() == nil {
+		return // Nobody looks at the grid: do not draw it
+	}
 	g := r.room.VideoTick(now)
 	if r.display != nil {
 		r.display.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))))
 	}
-	if f := r.m.s.cfg.OnGrid; f != nil {
-		f(g, now)
-	}
+	deliverVideo(&r.sinks.grid, "", g, now)
 }
 
 func (r *receiver) audioTick(mix []int16, now time.Time) {
-	r.room.AudioTick(mix, nil)
+	var each func(string, []int16)
+	if r.sinks.audio.Load() != nil {
+		each = func(id string, chunk []int16) { deliverAudio(&r.sinks.audio, id, chunk, now) }
+	}
+	r.room.AudioTick(mix, each)
 	if r.display != nil {
 		r.display.WriteAudio(pcmBytes(mix))
 	}
-	if f := r.m.s.cfg.OnMix; f != nil {
-		f(mix, now)
-	}
+	deliverAudio(&r.sinks.mix, "", mix, now)
 }
 
 // sync makes the room's participants follow the registry.
@@ -139,6 +162,7 @@ func (r *receiver) sync() {
 func (r *receiver) setLimit(n int) { r.room.SetLimit(n) }
 
 func (r *receiver) stop() {
+	r.sinks.stop()
 	if r.display != nil {
 		r.display.Stop()
 	}
@@ -214,6 +238,10 @@ func (p *pipe) push(pkt *rtp.Packet) {
 	if p.format == "" {
 		return
 	}
+	if !p.r.wants(p.t.Kind) {
+		p.stopLocked() // Nothing consumes it (any more)
+		return
+	}
 	if p.dec == nil {
 		if now.Sub(p.failed) < restartDelay || !p.startLocked() {
 			return
@@ -271,7 +299,9 @@ func (p *pipe) consume(dec *ffmpeg.Decoder) {
 	if p.t.Kind == peer.KindVideo {
 		first := true
 		for buf := range dec.Frames() {
-			p.r.room.PushVideo(p.owner, compose.FrameFrom(dec.Width(), dec.Height(), buf), time.Now())
+			f, now := compose.FrameFrom(dec.Width(), dec.Height(), buf), time.Now()
+			p.r.room.PushVideo(p.owner, f, now)
+			deliverVideo(&p.r.sinks.video, p.owner, f, now)
 			if first {
 				first = false
 				p.selected(true)

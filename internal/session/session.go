@@ -59,6 +59,9 @@ type Config struct {
 	// and the calls must not block.
 	OnGrid func(f *compose.Frame, at time.Time)
 	OnMix  func(samples []int16, at time.Time)
+	// Receive makes the session ready to decode what it receives for
+	// callbacks set later (SetOnVideo…), checking the decoders at Start.
+	Receive bool
 
 	Logger  *slog.Logger
 	OnEvent func(Event)                  // Participant events; must not block
@@ -67,9 +70,9 @@ type Config struct {
 	OnWaitingHost func()
 }
 
-// signalClient is the signaling side as the session uses it;
+// SignalClient is the signaling side as the session uses it;
 // *jitsi.Adapter implements it, tests replace it.
-type signalClient interface {
+type SignalClient interface {
 	Connect(ctx context.Context, peerID string, handler signaling.SignalingHandler) error
 	Disconnect(peerID string) error
 	SetReceivePolicy(peerID string, p *signaling.ReceivePolicy)
@@ -77,7 +80,7 @@ type signalClient interface {
 
 // newSignal builds the signaling client for a configuration (tests replace
 // it).
-var newSignal = func(c map[string]any, logger *slog.Logger) (signalClient, error) {
+var newSignal = func(c map[string]any, logger *slog.Logger) (SignalClient, error) {
 	a := jitsi.NewAdapter(logger)
 	if err := a.ParseConfig(c); err != nil {
 		return nil, err
@@ -94,7 +97,7 @@ var fetchMeeting = func(ctx context.Context, meetingURL string, insecure bool) (
 type Session struct {
 	cfg    Config
 	logger *slog.Logger
-	sig    signalClient
+	sig    SignalClient
 	peer   *peer.Peer
 	reg    *registry
 	room   string

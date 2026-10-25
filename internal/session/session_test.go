@@ -26,8 +26,8 @@ func (c *collected) config(cfg Config) Config {
 
 func TestSession_JoinEventsClose(t *testing.T) {
 	f := &fakeSignal{
-		occupants: []signaling.Occupant{{ID: "a", DisplayName: "Alice"}, {ID: "b", DisplayName: "Bob"}},
-		sources:   []signaling.RemoteSource{{SSRC: 1, Kind: "video", Name: "b-v0", Owner: "b"}},
+		Occupants: []signaling.Occupant{{ID: "a", DisplayName: "Alice"}, {ID: "b", DisplayName: "Bob"}},
+		Sources:   []signaling.RemoteSource{{SSRC: 1, Kind: "video", Name: "b-v0", Owner: "b"}},
 	}
 	useFake(t, f)
 	var c collected
@@ -44,12 +44,12 @@ func TestSession_JoinEventsClose(t *testing.T) {
 	if got := len(s.Participants()); got != 2 {
 		t.Errorf("%d participants, want 2", got)
 	}
-	p := f.lastPolicy()
+	p := f.LastPolicy()
 	if p == nil || p.LastN != 9 || p.DefaultMaxHeight != 180 || len(p.Selected) != 1 || p.Selected[0] != "b-v0" || p.MaxHeights["b-v0"] != 720 {
 		t.Errorf("policy %+v", p)
 	}
-	if f.config["xmpp_domain"] != "meet.test" || f.config["room_name"] != "myroom" || f.config["focus_jid"] != "focus.meet.test" {
-		t.Errorf("signal config %v", f.config)
+	if f.Config()["xmpp_domain"] != "meet.test" || f.Config()["room_name"] != "myroom" || f.Config()["focus_jid"] != "focus.meet.test" {
+		t.Errorf("signal config %v", f.Config())
 	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
@@ -59,8 +59,8 @@ func TestSession_JoinEventsClose(t *testing.T) {
 	default:
 		t.Fatal("Done not closed after Close")
 	}
-	if s.State() != StateClosed || s.Err() != nil || !f.disconnected {
-		t.Errorf("after Close: state %s err %v disconnected %v", s.State(), s.Err(), f.disconnected)
+	if s.State() != StateClosed || s.Err() != nil || !f.Disconnected() {
+		t.Errorf("after Close: state %s err %v disconnected %v", s.State(), s.Err(), f.Disconnected())
 	}
 	s.Close() // Idempotent
 	c.mu.Lock()
@@ -77,9 +77,7 @@ func TestSession_SignalingLostFails(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.mu.Lock()
-	h := f.handler
-	f.mu.Unlock()
+	h := f.Handler()
 	h.OnSignalingLost(errFake)
 	select {
 	case <-s.Done():
@@ -92,7 +90,7 @@ func TestSession_SignalingLostFails(t *testing.T) {
 }
 
 func TestSession_StartErrors(t *testing.T) {
-	f := &fakeSignal{connectErr: jitsi.ErrAuthFailed}
+	f := &fakeSignal{ConnectErr: jitsi.ErrAuthFailed}
 	useFake(t, f)
 	if _, err := Start(context.Background(), Config{MeetingURL: "https://meet.test/r", DisplayName: "X", Logger: quietLogger}); !errors.Is(err, jitsi.ErrAuthFailed) {
 		t.Errorf("connect error: %v", err)
@@ -117,8 +115,8 @@ func TestSession_GuestUsesAnonymousDomain(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if f.config["xmpp_domain"] != "guest.meet.test" || f.config["focus_jid"] != "focus.meet.test" {
-		t.Errorf("guest config %v", f.config)
+	if f.Config()["xmpp_domain"] != "guest.meet.test" || f.Config()["focus_jid"] != "focus.meet.test" {
+		t.Errorf("guest config %v", f.Config())
 	}
 }
 
@@ -132,8 +130,8 @@ func TestSession_TokenSources(t *testing.T) {
 	s.Close()
 	// A token (here from the URL) means an authenticated user: the main
 	// domain, not the guest one.
-	if f.config["jwt"] != "fromurl" || f.config["xmpp_domain"] != "meet.test" {
-		t.Errorf("config %v", f.config)
+	if f.Config()["jwt"] != "fromurl" || f.Config()["xmpp_domain"] != "meet.test" {
+		t.Errorf("config %v", f.Config())
 	}
 	s, err = Start(context.Background(), Config{MeetingURL: "https://meet.test/r", DisplayName: "X", Logger: quietLogger,
 		AppID: "app", AppSecret: "sec", Moderator: true, Subject: "tenant", TokenTTL: time.Hour})
@@ -141,7 +139,7 @@ func TestSession_TokenSources(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Close()
-	if f.config["jwt_app_id"] != "app" || f.config["jwt_app_secret"] != "sec" || f.config["jwt_moderator"] != true || f.config["jwt_subject"] != "tenant" || f.config["jwt_ttl"] != "1h0m0s" {
-		t.Errorf("config %v", f.config)
+	if f.Config()["jwt_app_id"] != "app" || f.Config()["jwt_app_secret"] != "sec" || f.Config()["jwt_moderator"] != true || f.Config()["jwt_subject"] != "tenant" || f.Config()["jwt_ttl"] != "1h0m0s" {
+		t.Errorf("config %v", f.Config())
 	}
 }

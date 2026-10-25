@@ -114,11 +114,11 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 **Independent Test**: quickstart scenario 3.
 
-- [ ] T042 [P] [US3] Test `jmt/session_test.go` (fake signaling via an internal test hook): `Events()` yields `ParticipantJoined`/`Left`/`Changed`; `OnVideo` frames carry participant id and fixed size; `OnAudio` per participant and `OnMixedAudio` chunks have 1920 samples; buffers reused after the callback returns; a blocking callback drops frames but does not stall others
-- [ ] T043 [P] [US3] Test `jmt/publisher_test.go`: `FrameSource(640, 360, true, true)` → `WriteVideo` with wrong size returns an error; written frames reach the send track as VP8
-- [ ] T044 [US3] Implement callbacks and events in `jmt/session.go` + `internal/session/deliver.go` (non-blocking fan-out, one goroutine per callback with a 2-item queue, drop-oldest)
-- [ ] T045 [US3] Implement `jmt/publisher.go` (`FrameSource`, `Publisher.WriteVideo/WriteAudio/Close`) feeding the encoder's raw input (stdin video `-f rawvideo -pix_fmt yuv420p -s WxH -r 30`, loopback audio `-f s16le -ar 48000 -ac 2`)
-- [ ] T046 [US3] Write `jmt/doc.go` package docs and `jmt/example_test.go` (`ExampleJoin`: join, count frames per participant, publish a moving test pattern; under 30 lines of user code, SC-006; skipped without `JMT_URL`); commit
+- [X] T042 [P] [US3] Test `jmt/session_test.go` (fake signaling via an internal test hook): `Events()` yields `ParticipantJoined`/`Left`/`Changed`; `OnVideo` frames carry participant id and fixed size; `OnAudio` per participant and `OnMixedAudio` chunks have 1920 samples; buffers reused after the callback returns; a blocking callback drops frames but does not stall others
+- [X] T043 [P] [US3] Test `jmt/publisher_test.go`: `FrameSource(640, 360, true, true)` → `WriteVideo` with wrong size returns an error; written frames reach the send track as VP8
+- [X] T044 [US3] Implement callbacks and events in `jmt/session.go` + `internal/session/deliver.go` (non-blocking fan-out, one goroutine per callback with a 2-item queue, drop-oldest)
+- [X] T045 [US3] Implement `jmt/publisher.go` (`FrameSource`, `Publisher.WriteVideo/WriteAudio/Close`) feeding the encoder's raw input (stdin video `-f rawvideo -pix_fmt yuv420p -s WxH -r 30`, loopback audio `-f s16le -ar 48000 -ac 2`)
+- [X] T046 [US3] Write `jmt/doc.go` package docs and `jmt/example_test.go` (`ExampleJoin`: join, count frames per participant, publish a moving test pattern; under 30 lines of user code, SC-006; skipped without `JMT_URL`); commit
 
 ---
 
