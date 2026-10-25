@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -140,5 +141,40 @@ func TestDecoder_StopEndsFrames(t *testing.T) {
 	}
 	if _, err := d.Write(bytes.Repeat([]byte{0}, 10)); err == nil {
 		t.Error("write after Stop succeeded")
+	}
+}
+
+// TestVideoDecoder_NoFrameDelay checks that a frame comes out as soon as it
+// is written, not when the next one arrives (33 ms later at 30 fps).
+func TestVideoDecoder_NoFrameDelay(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	header, frames := ivfFrames(t, encodeTo(t, bin, "v.ivf", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30:duration=2",
+		"-c:v", "libvpx", "-deadline", "realtime", "-g", "30", "-f", "ivf"), 0)
+	d, err := ffmpeg.StartVideoDecoder(context.Background(), ffmpeg.DecoderConfig{Bin: bin, Format: "ivf", Height: 180, Logger: testLogger})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Stop()
+	sent := make(chan time.Time, len(frames))
+	go func() {
+		d.Write(header)
+		start := time.Now()
+		for i, f := range frames { // Live pace
+			time.Sleep(time.Until(start.Add(time.Duration(i) * time.Second / 30)))
+			sent <- time.Now()
+			d.Write(f)
+		}
+		d.CloseInput()
+	}()
+	var delays []time.Duration
+	for range d.Frames() {
+		delays = append(delays, time.Since(<-sent))
+	}
+	if len(delays) < 50 {
+		t.Fatalf("%d frames, want 60", len(delays))
+	}
+	slices.Sort(delays)
+	if med := delays[len(delays)/2]; med > 20*time.Millisecond {
+		t.Errorf("median delay from input to frame %v, want a few ms", med)
 	}
 }

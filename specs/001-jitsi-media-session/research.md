@@ -93,8 +93,10 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
 ## R7. Receiving and decoding
 
 - **Decision**: the peer answers the bridge's offer with VP8, VP9 and H.264 for video and
-  Opus for audio (AV1 not offered). For each received stream Go depacketizes RTP (Pion
-  `samplebuilder` with the VP8/VP9/H.264 depacketizers) into IVF (VP8/VP9) or Annex-B
+  Opus for audio (AV1 not offered). For each received stream Go depacketizes RTP (a frame
+  assembler with Pion's VP8/VP9/H.264 depacketizers, releasing a frame at its marker
+  packet; Pion's `samplebuilder` waits for the next frame, one frame interval more —
+  revised 2026-10-25) into IVF (VP8/VP9) or Annex-B
   (H.264), and Opus into Ogg, written to one ffmpeg decoder per stream on stdin; the
   decoder writes raw frames on stdout:
   - video: `yuv420p` scaled and padded to a **fixed 16:9 size per participant** (the
@@ -162,8 +164,11 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
 ## R11. Outputs
 
 - **Decision**:
-  - **Display**: one ffmpeg muxes grid video + mixed audio into NUT on stdout, piped into
-    `ffplay -fflags nobuffer -flags low_delay -framedrop -window_title "<room>" -`.
+  - **Display**: the session writes grid video + mixed audio as one NUT stream straight
+    into `ffplay -fflags nobuffer -flags low_delay -framedrop -f nut -i pipe:0`, each frame
+    and chunk stamped with the time it was made (revised 2026-10-25: an ffmpeg muxing the
+    two raw inputs counted frames and samples instead, so a stream that started later or
+    lost data stayed behind and the muxer held the other one back, 0.1–0.3 s measured).
   - **Mixed recording / grid feed**: the same grid ffmpeg gets extra outputs (one process,
     several outputs): a Matroska file (H.264 `-preset veryfast` + AAC, readable everywhere,
     playable after Ctrl+C) and MPEG-TS over an SRT listener for the grid feed.

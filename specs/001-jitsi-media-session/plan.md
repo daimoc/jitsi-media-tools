@@ -93,7 +93,7 @@ internal/
   jitsi/                    # copied signaling + presence/participants, config.js discovery,
     jwt/                    #   guest wait, selection messages; testdata/golden
   peer/                     # PeerConnection: media engine, consent, TWCC, send tracks, OnTrack
-  rtpmedia/                 # IVF/Ogg parsing, pacing+packetizing (send), samplebuilder → IVF/Annex-B/Ogg (receive)
+  rtpmedia/                 # IVF/Ogg parsing, pacing+packetizing (send), frame assembly → IVF/Annex-B/Ogg (receive)
   ffmpeg/                   # locate+probe, process supervision, loopback sockets,
                             #   encoder/decoder/output arg builders, devices_{linux,darwin,windows}.go,
                             #   proc_{unix,windows}.go

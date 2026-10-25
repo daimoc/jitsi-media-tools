@@ -41,17 +41,22 @@ type Decoder struct {
 // of the stream's picture size, which the bridge's layer switches cause.
 var lowDelayInput = []string{"-flags", "low_delay", "-probesize", "32", "-analyzeduration", "0"}
 
+// lowDelayOutput writes each frame as soon as it is decoded: the raw video
+// encoder's frame threads otherwise hold one frame back (33 ms at 30 fps).
+var lowDelayOutput = []string{"-threads", "1"}
+
 // VideoArgs returns the arguments of a video decoder writing w×h yuv420p.
 func VideoArgs(format string, w, h int) []string {
 	size := strconv.Itoa(w) + ":" + strconv.Itoa(h)
 	args := []string{"-hide_banner", "-nostats", "-nostdin"}
 	args = append(args, lowDelayInput...)
-	return append(args,
+	args = append(args,
 		"-f", format, "-i", "pipe:0", "-an",
 		"-vf", "scale="+size+":force_original_aspect_ratio=decrease:force_divisible_by=2,"+
 			"pad="+size+":(ow-iw)/2:(oh-ih)/2,format=yuv420p",
-		"-fps_mode", "passthrough", "-pix_fmt", "yuv420p", "-f", "rawvideo", "pipe:1",
-	)
+		"-fps_mode", "passthrough", "-pix_fmt", "yuv420p")
+	args = append(args, lowDelayOutput...)
+	return append(args, "-f", "rawvideo", "pipe:1")
 }
 
 // AudioArgs returns the arguments of an audio decoder writing s16le.

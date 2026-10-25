@@ -10,11 +10,10 @@ import (
 	"github.com/pion/rtp"
 	"github.com/pion/rtp/codecs"
 	"github.com/pion/webrtc/v3/pkg/media/oggwriter"
-	"github.com/pion/webrtc/v3/pkg/media/samplebuilder"
 )
 
-// maxLatePackets is how many packets the sample builder waits for a missing
-// one before giving up on its frame (about 0.5 s of video).
+// maxLatePackets is how many packets the assembler buffers while waiting
+// for a missing one before giving up on its frame (about 0.5 s of video).
 const maxLatePackets = 256
 
 // maxLateTime is how long a frame with a missing packet is waited for.
@@ -69,24 +68,20 @@ func NewReceiver(mimeType string, out io.Writer) (*Receiver, error) {
 // video sets up frame reassembly; fourCC "" means Annex B (H.264, whose
 // depacketizer already emits start codes).
 func (r *Receiver) video(d rtp.Depacketizer, fourCC string, out io.Writer) {
-	sb := samplebuilder.New(maxLatePackets, d, VideoClockRate, samplebuilder.WithMaxTimeDelay(maxLateTime))
+	a := newAssembler(d, maxLatePackets, uint32(maxLateTime*VideoClockRate/time.Second))
 	var (
 		first  uint32
 		header bool
 	)
 	r.push = func(p *rtp.Packet) error {
-		sb.Push(p)
-		for {
-			s, ts := sb.PopWithTimestamp()
-			if s == nil {
-				return nil
-			}
-			if (!r.started || s.PrevDroppedPackets > 0) && r.NeedKeyframe != nil {
+		for _, f := range a.push(p) {
+			ts := f.timestamp
+			if (!r.started || f.dropped > 0) && r.NeedKeyframe != nil {
 				r.NeedKeyframe()
 			}
 			r.started = true
 			if fourCC == "" {
-				if _, err := out.Write(s.Data); err != nil {
+				if _, err := out.Write(f.data); err != nil {
 					return err
 				}
 				continue
@@ -98,15 +93,16 @@ func (r *Receiver) video(d rtp.Depacketizer, fourCC string, out io.Writer) {
 				header, first = true, ts
 			}
 			var fh [12]byte
-			binary.LittleEndian.PutUint32(fh[0:], uint32(len(s.Data)))
+			binary.LittleEndian.PutUint32(fh[0:], uint32(len(f.data)))
 			binary.LittleEndian.PutUint64(fh[4:], uint64(ts-first))
 			if _, err := out.Write(fh[:]); err != nil {
 				return err
 			}
-			if _, err := out.Write(s.Data); err != nil {
+			if _, err := out.Write(f.data); err != nil {
 				return err
 			}
 		}
+		return nil
 	}
 }
 

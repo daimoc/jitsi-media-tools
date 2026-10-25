@@ -84,7 +84,7 @@ func (r *receiver) start() error {
 			title = s.room
 		}
 		disp, err := output.StartDisplay(s.ctx, output.DisplayConfig{
-			FFmpeg: r.m.tools.ffmpeg, FFplay: r.m.tools.ffplay, Title: title,
+			FFplay: r.m.tools.ffplay, Title: title,
 			Width: gridWidth, Height: gridHeight, Logger: s.logger,
 		})
 		if err != nil {

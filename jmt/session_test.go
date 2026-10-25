@@ -174,12 +174,13 @@ func TestSession_BlockedCallbackStallsNothing(t *testing.T) {
 	waitFor(t, "mixed audio", func() bool { return r.count("mix audible") > 0 })
 	time.Sleep(time.Second)
 	secs := time.Since(start).Seconds()
-	// The grid runs at 30 fps (about 20 under the race detector, which
-	// slows drawing); a stall would bring it near 0.
-	if g := float64(r.count("grid")) / secs; g < 10 {
+	// The grid runs at 30 fps and the mix at 50 chunks/s; a stall would
+	// bring them near 0. Under the race detector, with the other packages'
+	// ffmpeg tests running alongside, they drop to about half.
+	if g := float64(r.count("grid")) / secs; g < 8 {
 		t.Errorf("grid at %.0f fps with OnVideo blocked, want about 30", g)
 	}
-	if m := float64(r.count("mix")) / secs; m < 40 {
+	if m := float64(r.count("mix")) / secs; m < 15 {
 		t.Errorf("mix at %.0f chunks/s with OnVideo blocked, want 50", m)
 	}
 }

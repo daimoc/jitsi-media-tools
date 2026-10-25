@@ -59,10 +59,9 @@ func TestReceiver_VP8ToIVF(t *testing.T) {
 		got = append(got, f)
 		stamps = append(stamps, fh.Timestamp)
 	}
-	// The sample builder releases a frame once the next one starts: all but
-	// the last are out.
-	if len(got) != len(frames)-1 {
-		t.Fatalf("%d frames, want %d", len(got), len(frames)-1)
+	// A frame is out at its last (marker) packet, the last frame too.
+	if len(got) != len(frames) {
+		t.Fatalf("%d frames, want %d", len(got), len(frames))
 	}
 	for i := range got {
 		if !bytes.Equal(got[i], frames[i]) {
@@ -74,6 +73,64 @@ func TestReceiver_VP8ToIVF(t *testing.T) {
 	}
 	if keyframeRequests != 1 {
 		t.Errorf("%d keyframe requests, want 1 (at start)", keyframeRequests)
+	}
+}
+
+// ivfFrameCount counts the frames written to an IVF stream.
+func ivfFrameCount(t *testing.T, b []byte) int {
+	t.Helper()
+	if len(b) == 0 {
+		return 0
+	}
+	ir, _, err := ivfreader.NewWith(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for {
+		if _, _, err := ir.ParseNextFrame(); err != nil {
+			return n
+		}
+		n++
+	}
+}
+
+func TestReceiver_ReorderedPackets(t *testing.T) {
+	frames := [][]byte{append([]byte{0x10, 0, 0, 0x9d, 0x01, 0x2a}, bytes.Repeat([]byte{1}, 3000)...), bytes.Repeat([]byte{0x11}, 2500)}
+	pkts := packetize(&codecs.VP8Payloader{}, frames, 1200) // 3 packets each
+	var buf bytes.Buffer
+	r, _ := NewReceiver("video/VP8", &buf)
+	for _, i := range []int{0, 2, 1, 3, 5} { // Frame 2 lacks its middle packet
+		r.Push(pkts[i])
+	}
+	if n := ivfFrameCount(t, buf.Bytes()); n != 1 {
+		t.Fatalf("%d frames out, want 1 (frame 2 is incomplete)", n)
+	}
+	r.Push(pkts[4])
+	ir, _, _ := ivfreader.NewWith(&buf)
+	for i, want := range frames {
+		f, _, err := ir.ParseNextFrame()
+		if err != nil || !bytes.Equal(f, want) {
+			t.Fatalf("frame %d: %d bytes, %v; want %d bytes", i, len(f), err, len(want))
+		}
+	}
+}
+
+// TestReceiver_FrameWithoutMarker: when the bridge drops a frame's last
+// packets (a higher VP9 layer), it ends when the next frame starts.
+func TestReceiver_FrameWithoutMarker(t *testing.T) {
+	frames := [][]byte{append([]byte{0x10, 0, 0, 0x9d, 0x01, 0x2a}, bytes.Repeat([]byte{1}, 50)...), bytes.Repeat([]byte{0x11}, 50)}
+	pkts := packetize(&codecs.VP8Payloader{}, frames, 1200)
+	pkts[0].Marker = false
+	var buf bytes.Buffer
+	r, _ := NewReceiver("video/VP8", &buf)
+	r.Push(pkts[0])
+	if n := ivfFrameCount(t, buf.Bytes()); n != 0 {
+		t.Fatalf("%d frames before the next one starts, want 0", n)
+	}
+	r.Push(pkts[1])
+	if n := ivfFrameCount(t, buf.Bytes()); n != 2 {
+		t.Fatalf("%d frames, want 2", n)
 	}
 }
 
