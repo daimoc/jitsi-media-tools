@@ -221,3 +221,52 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   `ubuntu-latest`, `macos-latest`, `windows-latest`, installing ffmpeg, running
   `go vet ./... && go test -race ./...`.
 - **Rationale**: Principle VII; tests run without a server or devices.
+
+## R14. WHIP gateway for OBS (added 2026-10-27)
+
+- **Decision**: OBS's way into a meeting is a WHIP gateway (RFC 9725), replacing the SRT/RTMP
+  listener of a session (`obs-srt:`, `obs-rtmp:` are dropped).
+  - **Library-first**: `jmt.Gateway` (options: listen address, secret, UDP port, public
+    address, TLS files, stream cap, the same server overrides as a session); the CLI command
+    `serve` maps flags to it. Public types carry addresses and names only (Principle II).
+  - **Address**: `POST /whip/<host[:port]>/<room path>?name=<display name>[&jwt=…]` →
+    meeting URL `https://<host[:port]>/<room path>[?jwt=…]`; the room path is the rest of
+    the path, so a tenant (`/whip/meet.example.org/acme/Standup`) works as in a meeting URL. `201 Created` with the SDP answer and
+    `Location: /whip/session/<random id>`; `DELETE` on it ends the stream. `OPTIONS` answers
+    CORS. Trickle ICE (`PATCH`) is answered `405`: the gateway gives a complete answer and
+    OBS does not need trickle. Bearer token compared in constant time with
+    `WHIP_API_SECRET` (env, or `--secret-file`).
+  - **Timing**: the WHIP answer cannot wait for the meeting's media (Jicofo offers media only
+    once a second participant is there, which may be never). The gateway answers OBS as soon as
+    the meeting is joined (the join fails → 4xx/5xx with the reason, nothing kept), then
+    forwards packets once the Jitsi peer connects, dropping them before; when it connects, it
+    asks OBS for a keyframe (PLI) so the room starts on one.
+  - **Pass-through**: a second Pion peer per stream, facing OBS, with only H.264
+    (packetization-mode 1) and Opus. Received RTP goes unchanged except payload type and SSRC
+    (rewritten by the send track, `TrackLocalStaticRTP`) to an H.264 send track and an Opus
+    send track on the Jitsi peer; the session's publish path is a new "forward" source with no
+    encoder. PLI/FIR from the bridge on the Jitsi side → PLI to OBS. RTCP receiver reports and
+    NACKs stay per hop (each peer's interceptors). No ffmpeg runs for a gateway stream.
+  - **One layer**: OBS sends one H.264 layer and no simulcast, so the bridge cannot lower its
+    resolution for a receiver with little bandwidth; the streamer sets a bitrate the room can
+    take.
+  - **Receive side**: gateway participants send a receiver constraint of 0 video and do not
+    decode or play received audio.
+  - **End**: DELETE, OBS's peer reaching ICE failed/closed, or 10 s without RTP → leave the
+    meeting, close both peers. Gateway stop → all streams end; the HTTP server shuts down.
+  - **Public server**: one UDP port for all OBS peers (Pion `ICEUDPMux`, `--udp-port`, default
+    8189), `--public-ip` as a 1:1 NAT host candidate; plain HTTP by default, `--tls-cert`
+    `--tls-key` for built-in HTTPS; a reverse proxy may terminate TLS instead. Cap
+    `--max-streams` (default 10) → `503` past it.
+- **Rationale**: OBS 30+ has a WHIP output built in, so nothing runs next to OBS; pass-through
+  adds almost no delay or CPU, and OBS already encodes H.264 that Jitsi and browsers accept.
+  Principle IV is kept: nothing is encoded or decoded, Go forwards packets as it already does
+  for the encoder's frames.
+- **Alternatives**: SRT/RTMP into ffmpeg and re-encode to VP8 (≈1 core and 50–100 ms per
+  stream, one session per CLI run); re-encoding WHIP input to VP8 (same cost, only needed if a
+  deployment refuses H.264 — left as a later fallback); per-stream tokens minted through
+  `POST /api/v1/whip` (later feature).
+- **Risks to check first** (spike in the first task): Jicofo's offer on the target
+  deployments includes H.264, and the bridge forwards it to browsers; OBS's profile (High by
+  default with x264) plays in Chrome and Firefox when the meeting negotiated
+  `profile-level-id=42e01f`; the Jitsi peer can signal an H.264 send source.

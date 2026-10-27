@@ -8,7 +8,7 @@
 ## Summary
 
 A Go library (`jmt`) and CLI that join one Jitsi Meet room as one participant, publish one
-audio+video stream (file, devices, OBS over SRT/RTMP, or program frames) and play what others
+audio+video stream (file, devices, or program frames; OBS comes in through a WHIP gateway, R14) and play what others
 send (tile-grid window, recordings, SRT feeds for OBS, decoded frames for programs). Jitsi
 signaling, Jingle↔SDP, bridge channel and the WebRTC peer are copied from
 `webrtc-load-engine`; all media processing runs in ffmpeg processes fed and read by Go over
@@ -99,7 +99,9 @@ internal/
                             #   proc_{unix,windows}.go
   compose/                  # clock, grid layout, yuv scaling, labels, placeholder cards, mixer, jitter buffer
   output/                   # display (ffmpeg→ffplay), recording, OBS feeds (ports, feeds.json)
-  session/                  # glue: participants, selection policy, wiring signaling ↔ peer ↔ media
+  whip/                     # WHIP HTTP endpoint (RFC 9725): auth, addresses, resources (media side, R14)
+  session/                  # glue: participants, selection policy, wiring signaling ↔ peer ↔ media;
+                            #   gateway streams: WHIP peer → forward source → Jitsi session
 tests/live/                 # -tags live end-to-end tests
 .github/workflows/ci.yml    # Linux/macOS/Windows matrix
 CLAUDE.md, README.md
@@ -115,7 +117,7 @@ only package importing both sides.
 2. Foundation: ffmpeg locate/probe/supervise/loopback; peer; session state machine with fake
    signaling; participants from presence.
 3. US1 publish file → MVP. 4. US2 display. 5. US3 library frames both ways.
-6. US5 config.js / guest / JWT / TLS. 7. US4 OBS in + feeds. 8. US6 recording.
+6. US5 config.js / guest / JWT / TLS. 7. US4 OBS feeds; US9 WHIP gateway (R14). 8. US6 recording.
 9. US7 devices. 10. US8 selection and pins. 11. Polish: README, examples, live tests, CI green on 3 OSes.
 
 ## Complexity Tracking

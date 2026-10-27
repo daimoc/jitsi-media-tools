@@ -46,7 +46,6 @@ Exactly one kind:
 |---|---|---|
 | File | Path, Loop | file must exist and contain audio or video |
 | Devices | VideoDevice, AudioDevice (names from `ListDevices`) | either may be empty (audio-only / video-only); unknown name → error listing devices |
-| OBS | Protocol (srt / rtmp), ListenAddr | port free at start |
 | Frames | written by the program (`Publisher`) | frames `yuv420p`, Width×Height fixed at creation; audio s16le 48 kHz stereo |
 
 Common: Width, Height (default 1280x720), FPS 30, Audio/Video enabled flags.
@@ -78,3 +77,10 @@ default max height and PinHeight for pins (R8).
   Time (arrival on the session clock).
 - **AudioChunk**: Participant ID (empty for the room mix), 960 frames of 48 kHz stereo
   `int16` interleaved (20 ms), Time.
+
+## Gateway (US9)
+
+| Entity | Fields | Rules |
+|---|---|---|
+| Gateway | Listen, Secret, UDPPort, PublicIP, TLS files, MaxStreams | refuses to start without a secret; past MaxStreams, requests get 503 |
+| WHIP stream | ID (random, 128 bits), MeetingURL, DisplayName, Started, the Jitsi session, the publisher's peer | states: joining → waiting for media (alone in the room) → forwarding → ended; ends on DELETE, publisher peer failed/closed, 10 s without RTP, or gateway stop |

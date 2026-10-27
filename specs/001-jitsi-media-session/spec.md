@@ -14,6 +14,9 @@ OBS Media Sources; bounded selection (all audio, last 9 speakers' video low-res,
 name); library exposes decoded frames/samples both ways; Linux/Windows/macOS." Approved design:
 `docs/superpowers/specs/2026-10-24-jitsi-media-tools-design.md`.
 
+**Revised 2026-10-27**: OBS sends its program into meetings through a WHIP gateway (User Story 9)
+instead of an SRT/RTMP listener in a session; OBS's way out (SRT feeds) is unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Publish a media file into a room (Priority: P1)
@@ -87,29 +90,26 @@ browser participant, and publishes a generated test pattern that the browser sho
 
 ---
 
-### User Story 4 - Bridge OBS into and out of the meeting (Priority: P2)
+### User Story 4 - Bring the meeting into OBS (Priority: P2)
 
-A streamer points OBS's stream output at the tool, which sends OBS's program into the meeting as a
-participant. Each other participant, and optionally the whole grid, is made available as a stream
-address that OBS opens as a Media Source.
+Each participant, and optionally the whole grid, is made available as a stream address that OBS
+opens as a Media Source. (OBS's way into the meeting is User Story 9.)
 
 **Why this priority**: OBS integration is the main reason for the project after basic join and
 play.
 
-**Independent Test**: OBS streams a scene to the tool; the browser shows the scene. A Media Source
-in OBS opened on a participant's address shows that participant.
+**Independent Test**: a Media Source in OBS opened on a participant's address shows that
+participant.
 
 **Acceptance Scenarios**:
 
-1. **Given** the tool listens for an OBS stream, **When** OBS starts streaming to the address the
-   tool printed, **Then** the meeting shows OBS's program video and audio within 5 seconds.
-2. **Given** OBS feeds are on, **When** a participant is in the room, **Then** the tool prints a
+1. **Given** OBS feeds are on, **When** a participant is in the room, **Then** the tool prints a
    stream address for that participant, and an OBS Media Source opened on it shows their video and
    plays their audio.
-3. **Given** a participant's feed is open in OBS, **When** they leave and rejoin with the same name,
+2. **Given** a participant's feed is open in OBS, **When** they leave and rejoin with the same name,
    **Then** the same address shows them again without changing the OBS source; while they are away
    the address shows a placeholder picture.
-4. **Given** the grid feed is on, **Then** one more address carries the whole grid with the mixed
+3. **Given** the grid feed is on, **Then** one more address carries the whole grid with the mixed
    audio.
 
 ---
@@ -201,6 +201,41 @@ follow the speakers, and a pinned participant stays shown when others talk.
 
 ---
 
+### User Story 9 - Stream OBS into any meeting through a WHIP gateway (Priority: P2)
+
+An operator runs the tool as a gateway on a public server. A streamer sets OBS's WHIP output to
+the gateway's address, followed by the meeting's server and room and a display name, with the
+gateway's shared secret as the bearer token. When they start streaming, OBS's program appears in
+that meeting as a participant with that name; when they stop, the participant leaves. Several
+streamers can use one gateway at the same time, into the same meeting or different ones, on any
+Jitsi deployment.
+
+**Why this priority**: it is OBS's way into the meeting, the main reason for the project after
+basic join and play. OBS has WHIP built in, so nothing runs next to OBS.
+
+**Independent Test**: start the gateway; in OBS, set Stream → WHIP with the server
+`http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS` and the secret, and start streaming;
+the browser in `https://localhost:8443/test` shows OBS's scene and hears its audio; stop
+streaming and "OBS" leaves.
+
+**Acceptance Scenarios**:
+
+1. **Given** the gateway runs, **When** OBS starts streaming to a meeting address with the right
+   secret, **Then** the meeting shows a participant with the given name, with OBS's video and
+   audio, within 5 seconds of a second participant being in the room.
+2. **Given** OBS is streaming through the gateway, **When** OBS stops streaming, **Then** the
+   participant leaves the meeting within 2 seconds.
+3. **Given** OBS's connection drops without OBS stopping, **Then** the participant leaves within
+   10 seconds of the last media received.
+4. **Given** a request without the secret or with a wrong one, **Then** the gateway refuses it
+   and joins nothing.
+5. **Given** two OBS instances stream to two different meetings at once, **Then** each meeting
+   shows its own stream, and stopping one does not affect the other.
+6. **Given** OBS streams video in a codec other than H.264 (AV1, HEVC), **Then** the gateway
+   refuses the request with a message that names H.264, and joins nothing.
+
+---
+
 ### Edge Cases
 
 - The meeting URL points to a server that is not Jitsi, or the room name is invalid: the tool stops
@@ -211,13 +246,18 @@ follow the speakers, and a pinned participant stays shown when others talk.
 - Two participants share a display name: each gets a distinct label and feed address (a suffix).
 - A participant sends audio only, or video only: their tile and feed handle the missing part
   (name card, silence).
-- The publish source ends or breaks (OBS stops streaming, a camera is unplugged): the tool keeps
+- The publish source ends or breaks (a camera is unplugged): the tool keeps
   the participant in the room with a placeholder and resumes when the source returns; a file that
   cannot be read stops the tool before joining.
 - A participant's video codec cannot be decoded: their tile shows the name card and the tool logs
   a warning once.
 - More pins than the video limit: the tool reports the cap and shows the first ones.
 - The tool is killed abruptly: no helper processes are left running afterwards.
+- A WHIP stream's meeting cannot be joined (not a Jitsi server, a guest refused, a bad token):
+  the gateway refuses the request with the reason, and OBS shows its connection error.
+- A WHIP stream arrives in an empty room: the participant joins and waits; its media reaches the
+  meeting once a second participant is there (the server sets up media only then).
+- The gateway is stopped: every gateway participant leaves its meeting cleanly.
 
 ## Requirements *(mandatory)*
 
@@ -241,8 +281,8 @@ follow the speakers, and a pinned participant stays shown when others talk.
 **Publishing**
 
 - **FR-007**: The tool MUST publish at most one audio and one video stream, from exactly one of:
-  a media file (once or looped), a camera and microphone chosen by name, an OBS stream received on
-  a listening address (SRT or RTMP), or frames and samples supplied by a program using the library.
+  a media file (once or looped), a camera and microphone chosen by name, or frames and samples
+  supplied by a program using the library. (OBS comes in through the gateway, FR-024.)
 - **FR-008**: The tool MUST list the capture devices available on the machine.
 - **FR-009**: The tool MUST allow publishing audio only or video only.
 - **FR-010**: When a live source stops, the tool MUST keep the participant in the room, send a
@@ -274,6 +314,30 @@ follow the speakers, and a pinned participant stays shown when others talk.
 - **FR-019**: Display, recording, OBS feeds and publishing MUST be usable in any combination in one
   session.
 
+**Gateway (WHIP)**
+
+- **FR-024**: The tool MUST be able to run as a gateway that accepts WHIP publishers (RFC 9725) on
+  HTTP, each at an address naming the meeting (server and room, optionally with a token) and the
+  display name; each accepted stream MUST join that meeting as one participant.
+- **FR-025**: The gateway MUST require a shared secret as the bearer token of every request, MUST
+  refuse to start without one, and MUST refuse requests without it.
+- **FR-026**: The gateway MUST join any Jitsi deployment named in the address, with the same
+  discovery, guest and token support as a session (FR-002–FR-005).
+- **FR-027**: The gateway MUST forward the publisher's H.264 video and Opus audio to the meeting
+  without decoding or re-encoding them, and MUST pass the meeting's keyframe requests back to the
+  publisher. It MUST refuse a publisher that offers no H.264 video or no Opus audio, unless it
+  sends only the other kind.
+- **FR-028**: The participant MUST leave when the publisher ends the stream (WHIP resource
+  deleted) or after 10 seconds without media, and all participants MUST leave when the gateway
+  stops.
+- **FR-029**: The gateway MUST serve several publishers at once, independently: one failing or
+  ending MUST NOT affect the others; the number at once MUST be capped by a setting.
+- **FR-030**: The gateway MUST be usable on a public server: media on one configurable UDP port,
+  a configurable public address for publishers behind NAT, and HTTPS either built in (certificate
+  and key) or from a reverse proxy in front.
+- **FR-031**: The gateway MUST log each stream's start, end and failure with the meeting and
+  name, and MUST NOT log the secret or tokens.
+
 **Library**
 
 - **FR-020**: Everything the command-line tool does MUST be available to Go programs through the
@@ -294,10 +358,13 @@ follow the speakers, and a pinned participant stays shown when others talk.
   the publish source, the active outputs, and the selection settings.
 - **Participant**: another person in the room: an id, a display name (made unique), whether they
   send audio and video, whether they are pinned, and when they last spoke.
-- **Publish source**: where the published media comes from: file, devices, OBS stream, or program
-  frames.
+- **Publish source**: where the published media comes from: file, devices, or program frames.
 - **Output**: what is done with received media: display, recording (per participant or mixed), OBS
   feeds (per participant and grid), or delivery to a program.
+- **Gateway**: a long-running server: its HTTP address, shared secret, UDP port, public address
+  and stream cap.
+- **WHIP stream**: one publisher on the gateway: its meeting, display name, resource address, and
+  the participant it joined as.
 - **Selection**: the set of participants whose video is received, with the limit, the pins and the
   resolutions.
 
@@ -321,6 +388,8 @@ follow the speakers, and a pinned participant stays shown when others talk.
 - **SC-007**: The same automated tests pass on Linux, Windows and macOS.
 - **SC-008**: After any exit, including Ctrl+C and a lost connection, no helper process from the
   session is left running.
+- **SC-009**: The gateway adds under 50 ms to OBS's own delay into the meeting, and one gateway
+  serves 10 streams at 720p30 at once on a 2-core server without falling behind.
 
 ## Assumptions
 
@@ -328,7 +397,12 @@ follow the speakers, and a pinned participant stays shown when others talk.
   preferences (as the local docker-jitsi-meet server does); older servers are out of scope.
 - A media helper program (ffmpeg, per the design) is installed on the machine or its path is given;
   the tool does not bundle it.
-- OBS uses its built-in stream outputs (SRT, RTMP) and Media Source; no OBS plugin is installed.
+- OBS (30 or newer) uses its built-in WHIP output to come in and Media Source to take feeds out;
+  no OBS plugin is installed. OBS's video settings (size, bitrate, keyframe interval) are what the
+  meeting receives; the gateway does not change them.
+- The gateway's participants send only; they receive no video and ignore received audio.
+- Handing out per-stream WHIP addresses and tokens through an API (instead of one shared secret)
+  is a later feature.
 - Display is watch-only: pins and selection are set at start-up by options, or at any time through
   the library.
 - Hand testing happens on Linux with the local server at `https://localhost:8443`; Windows and

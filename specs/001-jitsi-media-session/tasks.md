@@ -122,17 +122,36 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 
 ---
 
-## Phase 6: User Story 4 — Bridge OBS into and out of the meeting (P2)
+## Phase 6: User Story 4 — Bring the meeting into OBS (P2)
 
-**Goal**: OBS streams into the meeting; participants and the grid are SRT feeds for OBS Media Sources.
+**Goal**: participants and the grid are SRT feeds for OBS Media Sources. (OBS's way in is US9,
+Phase 6b; the SRT/RTMP input of T049 was dropped on 2026-10-27, research R14.)
 
 **Independent Test**: quickstart scenario 5.
 
 - [X] T047 [P] [US4] Test `internal/output/feeds_test.go`: port assignment — grid on BasePort, participants BasePort+1… in order of first selection, same port after leave/rejoin with the same unique name, at most MaxFeeds (default 16), `feeds.json` content `{"grid": "srt://host:9000", "Alice": "srt://host:9001"}`
 - [ ] T048 [P] [US4] Test `internal/ffmpeg/srt_test.go` (needs ffmpeg with srt): an output to `srt://127.0.0.1:P?mode=listener` is readable by a second ffmpeg caller; when the caller leaves, the supervised output restarts and accepts a new caller
-- [ ] T049 [US4] Implement OBS input in `internal/ffmpeg/encoder.go`: `OBSInput{Protocol: srt|rtmp, Listen}` → `-i srt://ADDR?mode=listener` or `-listen 1 -i rtmp://ADDR/live/obs`; supervised so OBS can reconnect; placeholder while no stream (FR-010); `jmt.OBSSource`; CLI `--publish obs-srt::PORT|obs-rtmp::PORT`; print `obs input <url>`
+- ~~T049~~ dropped (2026-10-27): OBS comes in through the WHIP gateway, Phase 6b
 - [ ] T050 [US4] Implement `internal/output/feeds.go`: per participant feed = constant-rate tile stream (latest frame repeated, name card when no video, silence when no audio) at 1280x720 (pinned high-res) or 640x360, encoded `-c:v libx264 -preset veryfast -tune zerolatency -g 60 -c:a aac -f mpegts srt://HOST:PORT?mode=listener&latency=120000`, supervised (T012), fed through drop-oldest queues; grid feed from the compositor when `Grid`; `FeedReady` events and stdout lines `feed NAME srt://host:port` (FR-017, FR-018)
 - [ ] T051 [US4] `jmt.Options.OBS`, `Session.FeedURLs()`, CLI `--obs --obs-host --obs-port --obs-max-feeds --obs-grid`; live test `tests/live/obs_test.go` reading a participant feed with ffmpeg as SRT caller; hand check quickstart scenario 5 with OBS; commit
+
+---
+
+## Phase 6b: User Story 9 — Stream OBS into any meeting through a WHIP gateway (P2)
+
+**Goal**: `serve` runs a WHIP gateway; each OBS stream joins its meeting as a participant, its
+H.264 and Opus forwarded unchanged (research R14).
+
+**Independent Test**: quickstart scenario 9; automated, ffmpeg ≥ 8 (`-f whip`) stands in for OBS.
+
+- [ ] T071 [US9] Spike, throwaway, not committed: on the local Jitsi, check that Jicofo's offer has H.264, that a session whose video send track is H.264 is shown by Chrome and Firefox when fed OBS-like H.264 (`ffmpeg -c:v libx264 -profile:v high -tune zerolatency`, one with `baseline`), and how the bridge reacts; record the results in research R14 (Risks) and adjust T075–T076 if needed
+- [ ] T072 [P] [US9] Test `internal/whip/handler_test.go`: address `/whip/meet.example.org:8443/My%20Room?name=OBS&jwt=T` → meeting `https://meet.example.org:8443/My%20Room?jwt=T`, name `OBS`; no name → 400; no or wrong bearer → 401 and the publisher is not called; `POST` `application/sdp` → `201`, answer body, `Location` `/whip/session/<id>`; `DELETE` it → 200 then 404; past MaxStreams → 503; `PATCH` → 405; `OPTIONS` → CORS headers; a publisher error → its status and message; the token never appears in logs
+- [ ] T073 [P] [US9] Test `internal/peer/forward_test.go`, two in-process Pion pairs: a WHIP-facing peer accepts an offer with H.264 + Opus and answers only those; an offer without H.264 video (AV1 only) is refused; RTP received on it reaches the other pair's H.264/Opus send tracks with the same payload bytes and timestamps; a PLI arriving on the send side makes the WHIP-facing peer send a PLI to its publisher
+- [ ] T074 [US9] Implement `internal/whip`: `Handler{Secret, MaxStreams, Publisher}` with `Publisher.Publish(ctx, Request{MeetingURL, Name, Offer}) (Stream{Answer, End()}, error)`, a status-carrying error type, constant-time secret check, random 128-bit ids, resource registry; add `internal/whip` to the media side in `internal/boundary_test.go`
+- [ ] T075 [US9] Implement in `internal/peer`: a send-codec option on `New` (H.264 `packetization-mode=1` video track instead of VP8); the WHIP-facing peer (media engine H.264 + Opus only, `ICEUDPMux` on one port shared by all streams, `NAT1To1IPs` from PublicIP) with RTP forwarding into a send track and PLI relay
+- [ ] T076 [US9] Implement in `internal/session`: a "forward" publish source (no encoder, no placeholder; packets dropped until the Jitsi peer connects, then a PLI to the publisher), receive constraint of 0 video and no decoders for a gateway session, end after 10 s without RTP or on the publisher peer failing; `gateway.go` implementing `whip.Publisher` by joining the meeting (wait-host 30 s) and wiring both peers; `Close` ends every stream
+- [ ] T077 [US9] `jmt.Gateway` per `contracts/library-api.md` (`NewGateway`, `Serve`, `Streams`, `Events`, `Close`), Go doc and a runnable example; CLI `serve` per `contracts/cli.md` (flags, `$WHIP_API_SECRET`, `--secret-file`, printed lines, exit codes); remove `obs-srt:`/`obs-rtmp:` from `--publish` and `OBSSource` from the `jmt` docs
+- [ ] T078 [US9] Live test `tests/live/whip_test.go` (skips without ffmpeg ≥ 8 `whip` muxer): gateway on loopback, `ffmpeg -re -f lavfi testsrc2 + sine -c:v libx264 -tune zerolatency -c:a libopus -f whip -authorization S http://…/whip/localhost:8443/<room>?name=OBS`, a viewer session in the room sees "OBS" and decodes its video and audio; killing ffmpeg → "OBS" leaves within 10 s; a wrong token → nobody joins; README (OBS setup for WHIP), CLAUDE.md commands; hand check quickstart scenario 9 with OBS and a browser; commit
 
 ---
 
@@ -203,7 +222,8 @@ Always `export PATH=/usr/local/go/bin:$PATH`.
 - Setup (1) → Foundational (2) → user stories.
 - US1 (3) first (MVP). US2 (4) needs US1's tracks for its live test (receive side needs a publisher).
 - US3 (5) needs US1 + US2 (publish and receive paths).
-- US4 (6) needs US1 (encoder) and US2 (compositor). US6 (8) needs US4's feed processes for
+- US4 (6) needs US1 (encoder) and US2 (compositor). US9 (6b) needs US1 (send path) and US5
+  (joining real deployments) only; it is independent of US4. US6 (8) needs US4's feed processes for
   per-participant `tee` (or builds its own). US7 (9) needs US1 only. US5 (7) needs Foundational
   only. US8 (10) needs US2.
 - Polish (11) after the desired stories.
@@ -233,8 +253,8 @@ Phases 1–3, then stop and validate scenario 1 with a browser.
 
 ### Incremental Delivery
 
-US1 → US2 (tool now publishes and watches) → US3 (library) → US4 (OBS) → US5 (real servers) →
-US6 → US7 → US8. Each story is committed with tests green.
+US1 → US2 (tool now publishes and watches) → US3 (library) → US9 (OBS in, WHIP) → US4 (OBS
+feeds out) → US5 (real servers) → US6 → US7 → US8. Each story is committed with tests green.
 
 ## Notes
 

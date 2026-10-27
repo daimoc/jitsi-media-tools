@@ -68,7 +68,6 @@ type Source interface{ isSource() }
 
 func FileSource(path string, loop bool) Source
 func DeviceSource(video, audio string) Source             // names from ListDevices; "" omits
-func OBSSource(protocol, listenAddr string) Source         // "srt" or "rtmp", e.g. ":9100"
 func FrameSource(width, height int, audio, video bool) (*Publisher, Source)
 
 type Publisher struct{ /* unexported */ }
@@ -142,3 +141,44 @@ Behavior rules:
 - `Join` fails before contacting the server when ffmpeg (or a needed ffmpeg part, or
   ffplay for Display) is missing (FR-023).
 - `Close` is idempotent; after it returns no helper process is running (SC-008).
+
+## Gateway (WHIP, US9)
+
+```go
+type GatewayOptions struct {
+    Listen     string // HTTP address; default ":8080"
+    Secret     string // bearer token every request must carry; required
+    UDPPort    int    // one UDP port for all publishers' media; default 8189
+    PublicIP   string // address given to publishers behind NAT; "" = local addresses
+    TLSCert, TLSKey string // both set: HTTPS; else plain HTTP (TLS from a reverse proxy)
+    MaxStreams int    // streams at once; default 10
+
+    // Applied to every meeting a stream joins.
+    Insecure bool
+    WaitHost time.Duration // default 30s, so the publisher's request does not time out
+    Logger   *slog.Logger
+}
+
+func NewGateway(o GatewayOptions) (*Gateway, error) // error: no secret, port in use…
+func (g *Gateway) Serve(ctx context.Context) error   // until ctx ends or Close
+func (g *Gateway) Streams() []GatewayStream
+func (g *Gateway) Events() <-chan GatewayEvent       // stream started / ended / failed
+func (g *Gateway) Close() error                      // every stream leaves its meeting
+
+type GatewayStream struct {
+    ID          string // as in the WHIP resource address
+    MeetingURL  string // without the token
+    DisplayName string
+    Started     time.Time
+}
+
+type GatewayEvent struct {
+    Kind   GatewayEventKind // StreamStarted, StreamEnded, StreamFailed
+    Stream GatewayStream
+    Err    error            // why it failed or ended, if not by the publisher
+}
+```
+
+Address of a stream: `/whip/<host[:port]>/<room>?name=<display name>[&jwt=<token>]`.
+Rules: the secret is never logged; a meeting join failure answers the request with the reason
+and keeps nothing; a gateway stream does not decode or play received media.
