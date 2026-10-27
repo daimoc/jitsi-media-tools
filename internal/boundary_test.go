@@ -14,7 +14,7 @@ const module = "github.com/daimoc/jitsi-media-tools/"
 // the only glue between them.
 var (
 	signalingSide = []string{"internal/jitsi", "internal/signaling"}
-	mediaSide     = []string{"internal/rtpmedia", "internal/ffmpeg", "internal/compose", "internal/output"}
+	mediaSide     = []string{"internal/rtpmedia", "internal/ffmpeg", "internal/compose", "internal/output", "internal/whip"}
 )
 
 // TestImportBoundaries checks principles I and III on the source tree:
