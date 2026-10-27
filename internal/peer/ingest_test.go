@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -307,5 +308,69 @@ func TestIngest_UDPMuxAndPublicIP(t *testing.T) {
 				t.Errorf("answer %d: candidate %q, want 203.0.113.5:%s", i, c, port)
 			}
 		}
+	}
+}
+
+func TestH264Keyframe(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		p    []byte
+		want bool
+	}{
+		{"IDR", []byte{0x65, 0x88}, true},
+		{"SPS", []byte{0x67, 0x64}, true},
+		{"P slice", []byte{0x41, 0x9a}, false},
+		{"STAP-A with SPS", []byte{0x78, 0x00, 0x02, 0x67, 0x64, 0x00, 0x02, 0x68, 0xee}, true},
+		{"STAP-A without", []byte{0x78, 0x00, 0x02, 0x06, 0x05, 0x00, 0x02, 0x41, 0x9a}, false},
+		{"FU-A IDR start", []byte{0x7c, 0x85, 0x88}, true},
+		{"FU-A IDR middle", []byte{0x7c, 0x05, 0x88}, false},
+		{"FU-A P start", []byte{0x7c, 0x81, 0x9a}, false},
+		{"short", []byte{0x65}, false},
+	} {
+		if got := h264Keyframe(c.p); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// The ingest asks again for a keyframe until one comes, as a publisher may
+// miss or ignore the first request.
+func TestIngest_RepeatsKeyframeRequestsUntilOne(t *testing.T) {
+	pub, vt, sender := publisherPC(t, h264High, false)
+	ing, answer := newTestIngest(t, offerOf(t, pub))
+	if err := pub.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		t.Fatal(err)
+	}
+	var plis atomic.Int32
+	go func() {
+		for {
+			pkts, _, err := sender.ReadRTCP()
+			if err != nil {
+				return
+			}
+			for _, p := range pkts {
+				if _, ok := p.(*rtcp.PictureLossIndication); ok {
+					plis.Add(1)
+				}
+			}
+		}
+	}()
+	ing.Forward(KindVideo, newPacketLog())
+	seq := uint16(0)
+	send := func(payload []byte, d time.Duration) {
+		for end := time.Now().Add(d); time.Now().Before(end); seq++ {
+			vt.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: seq}, Payload: payload})
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	send([]byte{0x41, 0x9a}, 1600*time.Millisecond) // P frames only
+	if n := plis.Load(); n < 3 {
+		t.Fatalf("%d keyframe requests in 1.6 s without a keyframe, want one every 500 ms", n)
+	}
+	send([]byte{0x65, 0x88}, 100*time.Millisecond) // A keyframe
+	n := plis.Load()
+	send([]byte{0x41, 0x9a}, 1200*time.Millisecond)
+	if more := plis.Load() - n; more > 0 {
+		t.Errorf("%d keyframe requests after the keyframe, want none", more)
 	}
 }

@@ -117,6 +117,7 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 	in.last.Store(time.Now().UnixNano())
 	pc.OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { go in.forward(t) })
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
+		in.logger.Debug("Publisher connection", slog.String("state", s.String()))
 		switch s {
 		case webrtc.PeerConnectionStateFailed:
 			in.end(errors.New("the connection to the publisher failed"))
@@ -247,6 +248,8 @@ func (in *Ingest) forward(t *webrtc.TrackRemote) {
 		in.videoSSRC.Store(uint32(t.SSRC()))
 	}
 	in.logger.Debug("Receiving from the publisher", slog.String("kind", kind), slog.String("codec", t.Codec().MimeType))
+	var since time.Time // When video forwarding started
+	keyed := false      // A keyframe was forwarded since
 	for {
 		pkt, _, err := t.ReadRTP()
 		if err != nil {
@@ -261,10 +264,59 @@ func (in *Ingest) forward(t *webrtc.TrackRemote) {
 		in.mu.Lock()
 		w := in.dest[kind]
 		in.mu.Unlock()
-		if w != nil {
-			_ = w.WriteRTP(pkt)
+		if w == nil {
+			continue
 		}
+		if kind == KindVideo && !keyed {
+			// The meeting shows video from a keyframe on: ask until one
+			// comes (RequestKeyframe allows one request every 500 ms).
+			if since.IsZero() {
+				since = time.Now()
+			}
+			if keyed = h264Keyframe(pkt.Payload); keyed {
+				in.keyframeCame(time.Since(since))
+			} else {
+				in.RequestKeyframe()
+			}
+		}
+		_ = w.WriteRTP(pkt)
 	}
+}
+
+// slowKeyframe is a wait for the first keyframe that shows the publisher
+// ignores keyframe requests.
+const slowKeyframe = 2 * time.Second
+
+func (in *Ingest) keyframeCame(wait time.Duration) {
+	if wait < slowKeyframe {
+		in.logger.Info("Video forwarded from the publisher's first keyframe", slog.Duration("waited", wait.Round(time.Millisecond)))
+		return
+	}
+	in.logger.Warn("The meeting waited for the publisher's next keyframe: it ignores keyframe requests; "+
+		"set its keyframe interval to 1 s (OBS: Settings, Output, Keyframe Interval)", slog.Duration("waited", wait.Round(time.Millisecond)))
+}
+
+// h264Keyframe reports whether an H.264 RTP payload (RFC 6184) starts an
+// IDR picture or carries a sequence parameter set.
+func h264Keyframe(p []byte) bool {
+	if len(p) < 2 {
+		return false
+	}
+	switch p[0] & 0x1f {
+	case 5, 7:
+		return true
+	case 24: // STAP-A: aggregated NAL units, each after a 2-byte size
+		for i := 1; i+2 < len(p); {
+			n := int(p[i])<<8 | int(p[i+1])
+			if t := p[i+2] & 0x1f; t == 5 || t == 7 {
+				return true
+			}
+			i += 2 + n
+		}
+	case 28: // FU-A: the start of a fragmented NAL unit
+		return p[1]&0x80 != 0 && p[1]&0x1f == 5
+	}
+	return false
 }
 
 // RequestKeyframe asks the publisher for a keyframe, at most every 500 ms.
@@ -277,6 +329,7 @@ func (in *Ingest) RequestKeyframe() {
 	if last := in.lastPLI.Load(); now-last < int64(minKeyframeInterval) || !in.lastPLI.CompareAndSwap(last, now) {
 		return
 	}
+	in.logger.Debug("Keyframe requested from the publisher")
 	_ = in.pc.WriteRTCP([]rtcp.Packet{&rtcp.PictureLossIndication{MediaSSRC: ssrc}})
 }
 

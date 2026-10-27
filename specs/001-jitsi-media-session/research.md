@@ -247,6 +247,13 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
     send track on the Jitsi peer; the session's publish path is a new "forward" source with no
     encoder. PLI/FIR from the bridge on the Jitsi side → PLI to OBS. RTCP receiver reports and
     NACKs stay per hop (each peer's interceptors). No ffmpeg runs for a gateway stream.
+  - **Start time** (measured 2026-10-27, local Jitsi, ffmpeg's WHIP client): meeting joined
+    and publisher answered 0.13 s after its request; Jicofo acknowledges the session-accept
+    after ~0.87 s, media connects ~0.15 s later (server side, as for any participant); then
+    the room waits for a keyframe. ffmpeg ignores PLI: with a keyframe every 250 frames (OBS
+    "auto" with x264) the first keyframe came 7.4 s later, with 60 frames 1.4 s. The gateway
+    repeats the PLI every 500 ms until a keyframe comes, logs the wait, and warns past 2 s
+    that the publisher's keyframe interval should be 1 s.
   - **One layer**: OBS sends one H.264 layer and no simulcast, so the bridge cannot lower its
     resolution for a receiver with little bandwidth; the streamer sets a bitrate the room can
     take.

@@ -165,6 +165,12 @@ gateway serves several streams at once, into any Jitsi meetings.
 - Set OBS's encoder to H.264 (x264 or a hardware H.264 encoder) and the audio to Opus, its
   WHIP default. The gateway passes them through unchanged, so OBS's resolution, bitrate and
   keyframe interval are what the meeting gets. The gateway refuses AV1 and HEVC.
+- **Set OBS's keyframe interval to 1 s** (Settings → Output, Output Mode "Advanced",
+  Keyframe Interval). Viewers see video from a keyframe on, and a publisher that ignores
+  keyframe requests makes them wait for its next one: about 8 s with OBS's "0 (auto)" and
+  x264. The gateway logs a warning when that happens. With a 1 s interval, the meeting shows
+  the stream about 1.5–2.5 s after you start streaming. About 1 s of that is the Jitsi
+  server setting up the participant's media, which happens for any participant.
 - The meeting starts receiving media once a second participant is in it.
 - A stream that sends nothing for 10 s leaves the meeting.
 
