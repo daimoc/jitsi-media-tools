@@ -266,7 +266,21 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   stream, one session per CLI run); re-encoding WHIP input to VP8 (same cost, only needed if a
   deployment refuses H.264 — left as a later fallback); per-stream tokens minted through
   `POST /api/v1/whip` (later feature).
-- **Risks to check first** (spike in the first task): Jicofo's offer on the target
-  deployments includes H.264, and the bridge forwards it to browsers; OBS's profile (High by
-  default with x264) plays in Chrome and Firefox when the meeting negotiated
-  `profile-level-id=42e01f`; the Jitsi peer can signal an H.264 send source.
+- **Risks, checked by the T071 spike (2026-10-27, local Jitsi)**:
+  - Jicofo offers H.264 as payload type 107, `profile-level-id=42e01f;level-asymmetry-allowed=1;
+    packetization-mode=1`, with `nack`, `nack pli`, `ccm fir` and `transport-cc` (also VP8 100,
+    VP9 101, AV1 41, Opus 111).
+  - A session whose video send track is H.264 with that fmtp line, fed unchanged RTP from
+    `ffmpeg -c:v libx264 -profile:v high -tune zerolatency -f rtp` (as OBS sends: High
+    profile, packetization mode 1), is forwarded by the bridge and decoded by Chrome 154 and
+    Firefox 155 at 1280x720 and 30 fps, although the meeting negotiated constrained baseline.
+    Baseline, a subset, was not tried separately.
+  - Both browsers ask for keyframes when they start receiving mid-stream (Chrome 2 PLIs,
+    Firefox 6 with 10 packets lost before the first keyframe). The spike did not relay them and
+    recovered at the next 2 s keyframe; the gateway relays them to the publisher (FR-027), so
+    the room starts at once.
+  - Nothing else changes in the Jitsi signaling: the source-add carries SSRCs only, no codec.
+  - Not checked: deployments that disable H.264 in Jicofo (`codec.video.h264.enabled`). The
+    gateway learns it only from Jicofo's offer, after OBS was answered (the offer comes with a
+    second participant), so the stream then fails: it leaves the meeting, logs that the
+    deployment does not accept H.264, and reports `StreamFailed`.
