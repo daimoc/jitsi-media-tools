@@ -171,6 +171,8 @@ gateway serves several streams at once, into any Jitsi meetings.
   x264. The gateway logs a warning when that happens. With a 1 s interval, the meeting shows
   the stream about 1.5–2.5 s after you start streaming. About 1 s of that is the Jitsi
   server setting up the participant's media, which happens for any participant.
+- [docs/obs-whip.md](docs/obs-whip.md) gives the OBS settings for a quick start, a low delay
+  or the best picture.
 - The meeting starts receiving media once a second participant is in it.
 - A stream that sends nothing for 10 s leaves the meeting.
 
