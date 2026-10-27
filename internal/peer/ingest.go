@@ -281,7 +281,7 @@ func (in *Ingest) RequestKeyframe() {
 }
 
 func (in *Ingest) watchIdle(timeout time.Duration) {
-	tick := time.NewTicker(timeout / 4)
+	tick := time.NewTicker(min(timeout/4, 250*time.Millisecond))
 	defer tick.Stop()
 	for {
 		select {

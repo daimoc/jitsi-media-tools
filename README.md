@@ -3,8 +3,9 @@
 A command-line tool and Go library that joins a [Jitsi Meet](https://jitsi.org/jitsi-meet/)
 room as one participant, publishes media into it, and plays what the other participants send.
 
-- **Publish**: a media file (once or looped), a camera and microphone, or an OBS stream
-  over SRT or RTMP.
+- **Publish**: a media file (once or looped), or a camera and microphone.
+- **OBS gateway**: a WHIP endpoint that streams OBS (or any WHIP publisher) into any Jitsi
+  meeting as a participant, its H.264 and Opus passed through unchanged.
 - **Play**: show the room in a Jitsi-style tile grid, record it (one file per participant or
   one mixed file), and serve SRT feeds that OBS Media Sources can read.
 - **Library**: the `jmt` package gives the same features to other programs, such as an OBS
@@ -34,6 +35,9 @@ feeds](docs/media-pipeline.svg)
 - **Room**: the decoded frames are drawn into a 1280x720 tile grid at 30 fps, and the audio
   is mixed. Each participant's screen share gets its own tile. The window plays the grid and
   the mix through ffplay, and the library callbacks get the same media.
+- **Gateway**: `serve` answers WHIP publishers such as OBS. Each stream joins the meeting
+  named in its address as a send-only participant, and its H.264 and Opus packets go to the
+  Videobridge as they came, without ffmpeg. Keyframe requests from the room go back to OBS.
 - **Signaling**: XMPP over WebSocket with Jicofo and Prosody. Jingle offers become SDP for
   the WebRTC connection, and presence tells the tool who is in the room, their names and
   whether each source is muted.
@@ -51,7 +55,7 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | Publish a media file (`file:`, `file-loop:`) | Done |
 | List capture devices (`devices`) | Done |
 | Publish a camera and microphone (`device:`) | Not yet |
-| Publish an OBS stream (`obs-srt:`, `obs-rtmp:`) | Not yet |
+| Stream OBS into meetings: WHIP gateway (`serve`) | Done |
 | Tile-grid window (`--display`) | Done |
 | Recording (`--record`) | Not yet |
 | SRT feeds for OBS (`--obs`, `--obs-grid`) | Not yet |
@@ -67,6 +71,8 @@ The flags for the unfinished features are already parsed, but they do nothing ye
   Windows; no root is needed. On macOS, use `brew install ffmpeg`.
 - Docker, only for the local test server.
 
+The WHIP gateway (`serve`) needs no ffmpeg.
+
 ## Install
 
 Build from a clone:
@@ -81,6 +87,7 @@ go build -o jitsi-media-tools ./cmd/jitsi-media-tools
 
 ```text
 jitsi-media-tools join --url URL [--name NAME] [options]
+jitsi-media-tools serve [options]
 jitsi-media-tools devices [--ffmpeg PATH]
 ```
 
@@ -134,6 +141,47 @@ What the tool can do with received media:
 
 Received media is decoded only while an output uses it. Without `--display`, the command
 line only publishes and prints who joins and leaves.
+
+### Stream OBS into a meeting (WHIP gateway)
+
+```bash
+WHIP_API_SECRET=change-me jitsi-media-tools serve --public-ip 203.0.113.5
+```
+
+Then, in OBS 30 or newer, go to Settings → Stream:
+
+| Field | Value |
+|---|---|
+| Service | WHIP |
+| Server | `http://203.0.113.5:8080/whip/meet.example.org/MyRoom?name=OBS` |
+| Bearer Token | the secret |
+
+When you start streaming, "OBS" joins `https://meet.example.org/MyRoom` and shows your
+scene. When you stop streaming, it leaves. The server address names the meeting:
+`/whip/<server[:port]>/<room>`, with a tenant path such as `/whip/meet.example.org/acme/MyRoom`
+where the deployment uses one, and `&jwt=<token>` for a server that needs a token. One
+gateway serves several streams at once, into any Jitsi meetings.
+
+- Set OBS's encoder to H.264 (x264 or a hardware H.264 encoder) and the audio to Opus, its
+  WHIP default. The gateway passes them through unchanged, so OBS's resolution, bitrate and
+  keyframe interval are what the meeting gets. The gateway refuses AV1 and HEVC.
+- The meeting starts receiving media once a second participant is in it.
+- A stream that sends nothing for 10 s leaves the meeting.
+
+| Option | Default |
+|---|---|
+| `$WHIP_API_SECRET` or `--secret-file FILE`: the bearer token | required |
+| `--listen`: HTTP address | `:8080` |
+| `--udp-port`: one UDP port for all streams' media | 8189 |
+| `--public-ip`: the address OBS reaches, for a server behind NAT | local addresses |
+| `--tls-cert`, `--tls-key`: serve HTTPS (or put a reverse proxy in front) | HTTP |
+| `--max-streams` | 10 |
+| `--insecure`, `--wait-host`: for the meetings' servers | off, `30s` |
+
+On a public server, open the HTTP port (TCP) and the UDP port. The bearer token travels in
+every request, so use HTTPS across the internet. `serve` prints one line per stream: `+ OBS
+meet.example.org/MyRoom` when it starts, `-` when it ends, and `!` with the reason when it
+fails.
 
 ### Choose the video you receive
 
@@ -208,6 +256,9 @@ pub.WriteAudio(chunk)                              // every 20 ms
 - [jmt/example_test.go](jmt/example_test.go) is a complete example: it publishes a moving
   pattern and counts the frames received from each participant.
 
+`jmt.NewGateway` runs the WHIP gateway from a program, with the same options as `serve`;
+`Events()` reports streams starting, ending and failing.
+
 ## Try it on a local Jitsi
 
 ```bash
@@ -237,9 +288,10 @@ JMT_URL=https://localhost:8443/jmt-live JMT_INSECURE=1 \
 | `jmt/` | Public library |
 | `cmd/jitsi-media-tools/` | Command-line tool, a thin layer over `jmt` |
 | `internal/jitsi`, `internal/signaling` | XMPP and Jingle signaling |
-| `internal/peer`, `internal/rtpmedia` | WebRTC connection and RTP framing |
+| `internal/peer`, `internal/rtpmedia` | WebRTC connections (to the bridge, and from WHIP publishers) and RTP framing |
+| `internal/whip` | WHIP HTTP endpoint: secret, addresses, stream resources |
 | `internal/ffmpeg` | ffmpeg processes: encoding and stream probing |
-| `internal/session` | Joins signaling and media; the only package that imports both |
+| `internal/session` | Joins signaling and media, and runs the gateway's streams; the only package that imports both |
 | `tests/live/` | End-to-end tests (`-tags live`) |
 | `tests/platforms/jitsi/` | Local Jitsi in Docker |
 

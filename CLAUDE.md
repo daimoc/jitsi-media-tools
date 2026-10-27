@@ -21,7 +21,7 @@ Spec Kit already provides one. Constitution: `.specify/memory/constitution.md`.
 ```text
 jmt/                     # public library
 cmd/jitsi-media-tools/   # CLI over jmt
-internal/{signaling,jitsi,peer,rtpmedia,ffmpeg,compose,output,session}
+internal/{signaling,jitsi,peer,rtpmedia,ffmpeg,compose,output,whip,session}
 tests/live/              # -tags live
 ```
 
@@ -36,6 +36,7 @@ go vet ./... && go test -race ./...     # keep green
 JMT_URL=https://localhost:8443/jmt-live JMT_INSECURE=1 go test -tags live -count=1 -v ./tests/live/
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/IntriguingClimatesSupposeProbably --insecure --name Bot --display
 go run ./tests/displaycheck --url https://localhost:8443/jmt-display --insecure   # latency to the screen, by screenshot
+WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure   # WHIP gateway; OBS server http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS
 ```
 
 ## Code Style
@@ -45,6 +46,8 @@ import media packages and vice versa; `internal/session` is the only glue.
 
 ## Recent Changes
 
+- 001-jitsi-media-session: WHIP gateway for OBS (US9, research R14): `serve`, `jmt.Gateway`,
+  H.264/Opus pass-through; the live test uses ffmpeg ≥ 8 `-f whip` as the publisher
 - 001-jitsi-media-session: initial library + CLI (copied Jitsi signaling from webrtc-load-engine)
 
 <!-- MANUAL ADDITIONS START -->
