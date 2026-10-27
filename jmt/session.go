@@ -13,7 +13,7 @@ import (
 // Session is one participant in one room. Create it with Join.
 type Session struct {
 	s      *session.Session
-	events *eventQueue
+	events *eventQueue[Event]
 }
 
 // Join connects to the meeting and joins the room. It returns once joined,
@@ -25,7 +25,7 @@ func Join(ctx context.Context, o Options) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	q := newEventQueue()
+	q := newEventQueue[Event]()
 	cfg.OnEvent = func(e session.Event) { q.push(eventFrom(e)) }
 	cfg.OnWaitingHost = func() { q.push(Event{Kind: WaitingForHost}) }
 	s, err := session.Start(ctx, cfg)
@@ -161,22 +161,22 @@ func (s *Session) Wait() error {
 func (s *Session) Done() <-chan struct{} { return s.s.Done() }
 
 // eventQueue delivers events in order without blocking the producer.
-type eventQueue struct {
-	out chan Event
+type eventQueue[T any] struct {
+	out chan T
 
 	mu     sync.Mutex
-	queue  []Event
+	queue  []T
 	closed bool
 	wake   chan struct{}
 }
 
-func newEventQueue() *eventQueue {
-	q := &eventQueue{out: make(chan Event), wake: make(chan struct{}, 1)}
+func newEventQueue[T any]() *eventQueue[T] {
+	q := &eventQueue[T]{out: make(chan T), wake: make(chan struct{}, 1)}
 	go q.run()
 	return q
 }
 
-func (q *eventQueue) push(e Event) {
+func (q *eventQueue[T]) push(e T) {
 	q.mu.Lock()
 	if !q.closed {
 		q.queue = append(q.queue, e)
@@ -185,21 +185,21 @@ func (q *eventQueue) push(e Event) {
 	q.signal()
 }
 
-func (q *eventQueue) close() {
+func (q *eventQueue[T]) close() {
 	q.mu.Lock()
 	q.closed = true
 	q.mu.Unlock()
 	q.signal()
 }
 
-func (q *eventQueue) signal() {
+func (q *eventQueue[T]) signal() {
 	select {
 	case q.wake <- struct{}{}:
 	default:
 	}
 }
 
-func (q *eventQueue) run() {
+func (q *eventQueue[T]) run() {
 	defer close(q.out)
 	for {
 		q.mu.Lock()
@@ -219,9 +219,9 @@ func (q *eventQueue) run() {
 	}
 }
 
-// Address is something the session listens on, e.g. the OBS input.
+// Address is something the session listens on.
 type Address struct {
-	Label string // e.g. "obs input"
+	Label string // e.g. "feed Alice"
 	URL   string
 }
 

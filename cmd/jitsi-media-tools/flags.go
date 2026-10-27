@@ -59,7 +59,7 @@ func parseJoin(args []string, getenv func(string) string, stderr io.Writer) (*jo
 	fs.DurationVar(&ttl, "jwt-ttl", 0, "signed JWT lifetime (default 1h)")
 	fs.BoolVar(&o.Moderator, "jwt-moderator", false, "sign the JWT as a moderator")
 	fs.DurationVar(&o.WaitHost, "wait-host", 5*time.Minute, "how long a guest waits for a host")
-	fs.StringVar(&publish, "publish", "", "publish source: file:PATH, file-loop:PATH, device:VIDEO,AUDIO, obs-srt::PORT, obs-rtmp::PORT")
+	fs.StringVar(&publish, "publish", "", "publish source: file:PATH, file-loop:PATH, device:VIDEO,AUDIO (OBS: use serve)")
 	fs.StringVar(&publishSize, "publish-size", "1280x720", "published video size WxH")
 	fs.BoolVar(&display, "display", false, "show the room in a tile-grid window (needs ffplay)")
 	fs.StringVar(&recordDir, "record", "", "record into this directory")
@@ -142,7 +142,10 @@ func parsePublish(s string, w, h int) (jmt.Source, error) {
 		}
 		src = jmt.FileSource(arg, kind == "file-loop")
 	default:
-		return nil, fmt.Errorf("--publish %q: want file:PATH, file-loop:PATH, device:VIDEO,AUDIO, obs-srt::PORT or obs-rtmp::PORT", s)
+		if strings.HasPrefix(kind, "obs") {
+			return nil, fmt.Errorf("--publish %q: OBS streams in through the WHIP gateway, jitsi-media-tools serve", s)
+		}
+		return nil, fmt.Errorf("--publish %q: want file:PATH, file-loop:PATH or device:VIDEO,AUDIO", s)
 	}
 	return jmt.WithSize(src, w, h), nil
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,5 +73,69 @@ func TestRun_ExitCodes(t *testing.T) {
 	}
 	if code := run([]string{"bogus"}, &out, &errb); code != 2 {
 		t.Errorf("unknown command: %d", code)
+	}
+}
+
+func TestParseServe_Maps(t *testing.T) {
+	f, err := parseServe([]string{"--listen", ":9090", "--udp-port", "10000", "--public-ip", "203.0.113.5",
+		"--tls-cert", "c.pem", "--tls-key", "k.pem", "--max-streams", "3", "--insecure", "--wait-host", "1m"},
+		env(map[string]string{"WHIP_API_SECRET": "s3cret"}), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := f.opts
+	if o.Listen != ":9090" || o.Secret != "s3cret" || o.UDPPort != 10000 || o.PublicIP != "203.0.113.5" ||
+		o.TLSCert != "c.pem" || o.TLSKey != "k.pem" || o.MaxStreams != 3 || !o.Insecure || o.WaitHost.String() != "1m0s" {
+		t.Errorf("options %+v", o)
+	}
+}
+
+func TestParseServe_SecretFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(path, []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	f, err := parseServe([]string{"--secret-file", path}, env(map[string]string{"WHIP_API_SECRET": "env"}), io.Discard)
+	if err != nil || f.opts.Secret != "from-file" {
+		t.Fatalf("secret %q err %v, want the file's", f.opts.Secret, err)
+	}
+}
+
+func TestParseServe_Errors(t *testing.T) {
+	for _, c := range []struct {
+		args []string
+		env  map[string]string
+	}{
+		{nil, nil}, // No secret
+		{[]string{"--secret-file", "/nonexistent/secret"}, nil},
+		{[]string{"extra"}, map[string]string{"WHIP_API_SECRET": "s"}},
+	} {
+		if _, err := parseServe(c.args, env(c.env), io.Discard); err == nil {
+			t.Errorf("%v: expected an error", c.args)
+		}
+	}
+	var out, errb bytes.Buffer
+	if code := run([]string{"serve"}, &out, &errb); code != 2 && os.Getenv("WHIP_API_SECRET") == "" {
+		t.Errorf("serve without a secret: exit %d, want 2", code)
+	}
+}
+
+func TestParsePublish_NoOBSInput(t *testing.T) {
+	for _, p := range []string{"obs-srt::9100", "obs-rtmp::1935"} {
+		if _, err := parseJoin([]string{"--url", "u", "--publish", p}, env(nil), io.Discard); err == nil {
+			t.Errorf("--publish %s accepted; OBS comes in through serve", p)
+		}
+	}
+}
+
+func TestWHIPAddress(t *testing.T) {
+	for _, c := range []struct{ addr, public, scheme, want string }{
+		{"[::]:8080", "", "http", "http://localhost:8080/whip/<server>/<room>?name=<name>"},
+		{"0.0.0.0:8080", "203.0.113.5", "https", "https://203.0.113.5:8080/whip/<server>/<room>?name=<name>"},
+		{"127.0.0.1:9000", "", "http", "http://127.0.0.1:9000/whip/<server>/<room>?name=<name>"},
+	} {
+		if got := whipAddress(c.addr, c.public, c.scheme); got != c.want {
+			t.Errorf("whipAddress(%q, %q) = %q, want %q", c.addr, c.public, got, c.want)
+		}
 	}
 }

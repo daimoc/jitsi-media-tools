@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,9 +35,13 @@ const (
 // UDPMux carries the media of several peers on one UDP port.
 type UDPMux = ice.UDPMux
 
-// NewUDPMux serves conn to the peers given it.
-func NewUDPMux(conn net.PacketConn, logger *slog.Logger) UDPMux {
-	return webrtc.NewICEUDPMux(slogLoggerFactory{logger}.NewLogger("udpmux"), conn)
+// NewUDPMux listens on port of every IPv4 interface, loopback included,
+// for the peers given it (0: a free port per interface).
+func NewUDPMux(port int, logger *slog.Logger) (UDPMux, error) {
+	return ice.NewMultiUDPMuxFromPort(port,
+		ice.UDPMuxFromPortWithNetworks(ice.NetworkTypeUDP4),
+		ice.UDPMuxFromPortWithLoopback(),
+		ice.UDPMuxFromPortWithLogger(slogLoggerFactory{logger}.NewLogger("udpmux")))
 }
 
 // RTPWriter takes forwarded packets: a Peer's LocalTrack.

@@ -148,7 +148,7 @@ Behavior rules:
 type GatewayOptions struct {
     Listen     string // HTTP address; default ":8080"
     Secret     string // bearer token every request must carry; required
-    UDPPort    int    // one UDP port for all publishers' media; default 8189
+    UDPPort    int    // one UDP port, on every interface, for all publishers' media; default 8189, -1 any free port
     PublicIP   string // address given to publishers behind NAT; "" = local addresses
     TLSCert, TLSKey string // both set: HTTPS; else plain HTTP (TLS from a reverse proxy)
     MaxStreams int    // streams at once; default 10
@@ -160,6 +160,7 @@ type GatewayOptions struct {
 }
 
 func NewGateway(o GatewayOptions) (*Gateway, error) // error: no secret, port in use…
+func (g *Gateway) Addr() string                      // HTTP address listened on
 func (g *Gateway) Serve(ctx context.Context) error   // until ctx ends or Close
 func (g *Gateway) Streams() []GatewayStream
 func (g *Gateway) Events() <-chan GatewayEvent       // stream started / ended / failed

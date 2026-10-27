@@ -254,8 +254,9 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
     decode or play received audio.
   - **End**: DELETE, OBS's peer reaching ICE failed/closed, or 10 s without RTP → leave the
     meeting, close both peers. Gateway stop → all streams end; the HTTP server shuts down.
-  - **Public server**: one UDP port for all OBS peers (Pion `ICEUDPMux`, `--udp-port`, default
-    8189), `--public-ip` as a 1:1 NAT host candidate; plain HTTP by default, `--tls-cert`
+  - **Public server**: one UDP port for all OBS peers, bound on every IPv4 interface (Pion
+    `MultiUDPMuxDefault`; a mux on `0.0.0.0` took ~6 s to connect in tests), `--udp-port`,
+    default 8189), `--public-ip` as a 1:1 NAT host candidate; plain HTTP by default, `--tls-cert`
     `--tls-key` for built-in HTTPS; a reverse proxy may terminate TLS instead. Cap
     `--max-streams` (default 10) → `503` past it.
 - **Rationale**: OBS 30+ has a WHIP output built in, so nothing runs next to OBS; pass-through

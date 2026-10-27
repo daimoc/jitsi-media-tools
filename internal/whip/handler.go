@@ -95,6 +95,7 @@ type Handler struct {
 	streams  map[string]*entry
 	starting int
 	closed   bool
+	watchers sync.WaitGroup // One per started stream, until it has ended
 }
 
 type entry struct {
@@ -205,6 +206,7 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, path string) {
 	}
 	h.emit(Event{Kind: StreamStarted, Stream: e.info})
 	go func() {
+		defer h.watchers.Done()
 		<-st.Done
 		h.remove(id)
 		var why error
@@ -274,6 +276,7 @@ func (h *Handler) add(e *entry) bool {
 		h.streams = map[string]*entry{}
 	}
 	h.streams[e.info.ID] = e
+	h.watchers.Add(1) // Under mu: Close waits for every stream it may end
 	return true
 }
 
@@ -294,7 +297,8 @@ func (h *Handler) Streams() []Info {
 	return out
 }
 
-// Close ends every stream and refuses new ones.
+// Close ends every stream, refuses new ones, and returns once the streams
+// have ended and their events are emitted.
 func (h *Handler) Close() {
 	h.mu.Lock()
 	h.closed = true
@@ -304,6 +308,7 @@ func (h *Handler) Close() {
 	for _, e := range all {
 		e.stop()
 	}
+	h.watchers.Wait()
 }
 
 // parseAddress reads host[:port]/room (escaped) and the query of a publish

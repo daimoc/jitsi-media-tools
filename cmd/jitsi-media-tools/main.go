@@ -1,5 +1,6 @@
 // Command jitsi-media-tools joins a Jitsi Meet room to publish and play
-// media. It is a thin layer over the jmt package (contracts/cli.md).
+// media, or serves a WHIP gateway into meetings. It is a thin layer over
+// the jmt package (contracts/cli.md).
 package main
 
 import (
@@ -18,6 +19,7 @@ import (
 
 const usage = `usage:
   jitsi-media-tools join --url URL [--name NAME] [options]   (join --help for options)
+  jitsi-media-tools serve [options]                          WHIP gateway; secret in $WHIP_API_SECRET (serve --help)
   jitsi-media-tools devices [--ffmpeg PATH]
 `
 
@@ -26,7 +28,7 @@ func main() {
 }
 
 // run returns the exit code: 0 after Ctrl+C or a file played once, 1 on a
-// session error, 2 on bad arguments.
+// session or server error, 2 on bad arguments.
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
@@ -42,6 +44,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return 2
 		}
 		return join(f, stdout, stderr)
+	case "serve":
+		f, err := parseServe(args[1:], os.Getenv, stderr)
+		if err != nil {
+			if !errors.Is(err, flag.ErrHelp) {
+				fmt.Fprintln(stderr, "error:", err)
+			}
+			return 2
+		}
+		return serve(f, stdout, stderr)
 	case "devices":
 		fs := flag.NewFlagSet("devices", flag.ContinueOnError)
 		fs.SetOutput(stderr)

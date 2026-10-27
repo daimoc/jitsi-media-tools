@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"sync"
 	"time"
 
@@ -46,5 +47,28 @@ func ExampleJoin() {
 	defer mu.Unlock()
 	for _, p := range s.Participants() {
 		fmt.Printf("%s: %d frames\n", p.Name, frames[p.ID])
+	}
+}
+
+// ExampleNewGateway serves a WHIP gateway on port 8080: in OBS, set
+// Settings → Stream → WHIP to
+// http://<this host>:8080/whip/meet.example.org/MyRoom?name=OBS with the
+// secret as the bearer token. It prints each stream starting and ending,
+// until interrupted. It is compiled but not run by go test.
+func ExampleNewGateway() {
+	g, err := jmt.NewGateway(jmt.GatewayOptions{Secret: os.Getenv("WHIP_API_SECRET")})
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	go func() {
+		for e := range g.Events() {
+			fmt.Println(e.Kind, e.Stream.DisplayName, e.Stream.MeetingURL, e.Err)
+		}
+	}()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	if err := g.Serve(ctx); err != nil {
+		fmt.Println(err)
 	}
 }

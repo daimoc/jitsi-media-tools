@@ -275,13 +275,17 @@ func TestPeer_SendsH264(t *testing.T) {
 
 // Ingests share one UDP port, and give the public address in their answer.
 func TestIngest_UDPMuxAndPublicIP(t *testing.T) {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	free, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
-	mux := NewUDPMux(conn, quietLogger)
+	port := strconv.Itoa(free.LocalAddr().(*net.UDPAddr).Port)
+	free.Close()
+	mux, err := NewUDPMux(free.LocalAddr().(*net.UDPAddr).Port, quietLogger)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer mux.Close()
-	port := strconv.Itoa(conn.LocalAddr().(*net.UDPAddr).Port)
 	for i := 0; i < 2; i++ {
 		pub, _, _ := publisherPC(t, h264High, true)
 		ing, answer, err := NewIngest(IngestConfig{Logger: quietLogger, UDPMux: mux, PublicIPs: []string{"203.0.113.5"}}, offerOf(t, pub))

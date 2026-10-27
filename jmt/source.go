@@ -3,7 +3,7 @@ package jmt
 import "github.com/daimoc/jitsi-media-tools/internal/session"
 
 // Source is what the session publishes; build one with FileSource,
-// DeviceSource, OBSSource or FrameSource.
+// DeviceSource or FrameSource.
 type Source interface {
 	publish() *session.Publish
 }
