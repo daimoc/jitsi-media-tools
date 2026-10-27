@@ -83,6 +83,10 @@ func (s *Session) applySelection() {
 	if s.sig == nil {
 		return
 	}
+	if s.cfg.SendOnly {
+		s.sig.SetReceivePolicy(s.cfg.DisplayName, &signaling.ReceivePolicy{LastN: 0})
+		return
+	}
 	s.mu.Lock()
 	sel := s.cfg.Selection
 	s.mu.Unlock()

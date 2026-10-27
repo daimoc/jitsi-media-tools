@@ -42,6 +42,7 @@ type Stream struct {
 	Answer string
 	End    func()          // Ends the stream; called once at most
 	Done   <-chan struct{} // Closed once the stream has ended, for any reason
+	Err    func() error    // Once Done: why it ended, nil when by End or the publisher's DELETE
 }
 
 // Publisher starts streams. ctx bounds only the start, not the stream.
@@ -66,12 +67,29 @@ type Info struct {
 	Started    time.Time
 }
 
+// EventKind is what happened to a stream.
+type EventKind int
+
+const (
+	StreamStarted EventKind = iota
+	StreamEnded             // By its publisher (DELETE) or Close
+	StreamFailed            // Refused, or ended by an error
+)
+
+// Event is a stream starting or ending.
+type Event struct {
+	Kind   EventKind
+	Stream Info  // No ID when the stream was refused
+	Err    error // Why it failed
+}
+
 // Handler serves WHIP publishers.
 type Handler struct {
 	Secret     string // Bearer token of every request but OPTIONS
 	MaxStreams int    // Streams at once, being started included
 	Publisher  Publisher
 	Logger     *slog.Logger
+	OnEvent    func(Event) // Optional; must not block
 
 	mu       sync.Mutex
 	streams  map[string]*entry
@@ -86,6 +104,12 @@ type entry struct {
 }
 
 func (e *entry) stop() { e.once.Do(e.end) }
+
+func (h *Handler) emit(e Event) {
+	if h.OnEvent != nil {
+		h.OnEvent(e)
+	}
+}
 
 func (h *Handler) logger() *slog.Logger {
 	if h.Logger == nil {
@@ -168,6 +192,7 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, path string) {
 			status = e.Status
 		}
 		log.Warn("WHIP stream refused", slog.String("error", err.Error()))
+		h.emit(Event{Kind: StreamFailed, Stream: Info{MeetingURL: shown, Name: name, Started: time.Now()}, Err: err})
 		http.Error(w, err.Error(), status)
 		return
 	}
@@ -178,10 +203,21 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, path string) {
 		http.Error(w, "the gateway is stopping", http.StatusServiceUnavailable)
 		return
 	}
+	h.emit(Event{Kind: StreamStarted, Stream: e.info})
 	go func() {
 		<-st.Done
 		h.remove(id)
+		var why error
+		if st.Err != nil {
+			why = st.Err()
+		}
+		if why != nil {
+			log.Warn("WHIP stream failed", slog.String("id", id), slog.String("error", why.Error()))
+			h.emit(Event{Kind: StreamFailed, Stream: e.info, Err: why})
+			return
+		}
 		log.Info("WHIP stream ended", slog.String("id", id))
+		h.emit(Event{Kind: StreamEnded, Stream: e.info})
 	}()
 	log.Info("WHIP stream started", slog.String("id", id))
 	w.Header().Set("Content-Type", "application/sdp")

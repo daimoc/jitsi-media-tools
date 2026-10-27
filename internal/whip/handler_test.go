@@ -20,6 +20,7 @@ type fakePublisher struct {
 	mu      sync.Mutex
 	reqs    []Request
 	err     error
+	endErr  error // Why the streams end by themselves
 	streams []*fakeStream
 }
 
@@ -39,7 +40,8 @@ func (p *fakePublisher) Publish(_ context.Context, r Request) (Stream, error) {
 	}
 	s := &fakeStream{ended: make(chan struct{})}
 	p.streams = append(p.streams, s)
-	return Stream{Answer: "v=0 answer\r\n", End: s.end, Done: s.ended}, nil
+	endErr := p.endErr
+	return Stream{Answer: "v=0 answer\r\n", End: s.end, Done: s.ended, Err: func() error { return endErr }}, nil
 }
 
 func (p *fakePublisher) requests() []Request {
@@ -48,13 +50,32 @@ func (p *fakePublisher) requests() []Request {
 	return append([]Request(nil), p.reqs...)
 }
 
-func newTestHandler(t *testing.T, pub Publisher, max int) (*Handler, *bytes.Buffer) {
+// lockedBuffer is a log written by the handler's goroutines and read by
+// the test.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
+}
+
+func newTestHandler(t *testing.T, pub Publisher, max int) (*Handler, *lockedBuffer) {
 	t.Helper()
-	var logs bytes.Buffer
+	logs := &lockedBuffer{}
 	h := &Handler{Secret: secret, MaxStreams: max, Publisher: pub,
-		Logger: slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
+		Logger: slog.New(slog.NewTextHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))}
 	t.Cleanup(h.Close)
-	return h, &logs
+	return h, logs
 }
 
 func do(h http.Handler, method, target, token, body string) *httptest.ResponseRecorder {
@@ -282,5 +303,45 @@ func TestHandler_CloseEndsAll(t *testing.T) {
 	}
 	if w := do(h, http.MethodPost, "/whip/meet.example.org/C?name=OBS", secret, "v=0\r\n"); w.Code != http.StatusServiceUnavailable {
 		t.Errorf("POST after Close: status %d, want 503", w.Code)
+	}
+}
+
+func TestHandler_Events(t *testing.T) {
+	pub := &fakePublisher{}
+	h, _ := newTestHandler(t, pub, 10)
+	evs := make(chan Event, 10)
+	h.OnEvent = func(e Event) { evs <- e }
+	next := func() Event {
+		t.Helper()
+		select {
+		case e := <-evs:
+			return e
+		case <-time.After(time.Second):
+			t.Fatal("no event")
+			return Event{}
+		}
+	}
+	loc := do(h, http.MethodPost, "/whip/meet.example.org/Room?name=OBS&jwt=T", secret, "v=0\r\n").Header().Get("Location")
+	if e := next(); e.Kind != StreamStarted || e.Stream.ID != strings.TrimPrefix(loc, resourcePrefix) || e.Stream.MeetingURL != "https://meet.example.org/Room" || e.Stream.Name != "OBS" {
+		t.Errorf("first event %+v, want started", e)
+	}
+	do(h, http.MethodDelete, loc, secret, "")
+	if e := next(); e.Kind != StreamEnded || e.Err != nil {
+		t.Errorf("after DELETE: %+v, want ended", e)
+	}
+
+	pub.err = errors.New("joining failed")
+	do(h, http.MethodPost, "/whip/meet.example.org/Room?name=OBS", secret, "v=0\r\n")
+	if e := next(); e.Kind != StreamFailed || e.Err == nil || e.Stream.ID != "" {
+		t.Errorf("refused: %+v, want failed without id", e)
+	}
+
+	pub.err = nil
+	pub.endErr = errors.New("no media from the publisher")
+	do(h, http.MethodPost, "/whip/meet.example.org/Room?name=OBS", secret, "v=0\r\n")
+	next() // Started
+	pub.streams[len(pub.streams)-1].end()
+	if e := next(); e.Kind != StreamFailed || e.Err == nil || !strings.Contains(e.Err.Error(), "no media") {
+		t.Errorf("ended by itself with an error: %+v, want failed", e)
 	}
 }

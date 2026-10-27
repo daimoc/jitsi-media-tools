@@ -67,6 +67,15 @@ func (m *media) publishKinds() []string {
 	return kinds
 }
 
+// publishCodec is the sent video codec: H.264 forwarded as it came, or
+// VP8 from the encoder ("").
+func (m *media) publishCodec() string {
+	if p := m.s.cfg.Publish; p != nil && p.Input.Kind == "forward" {
+		return peer.H264Codec.MimeType
+	}
+	return ""
+}
+
 func (m *media) publishWidth() int {
 	if p := m.s.cfg.Publish; p != nil {
 		return p.Width
@@ -93,7 +102,11 @@ func (m *media) onTrack(t *peer.RemoteTrack) {
 		m.recv.track(t)
 	}()
 }
-func (m *media) onKeyframeRequest() {}
+func (m *media) onKeyframeRequest() {
+	if p := m.s.cfg.Publish; p != nil && p.Input.Kind == "forward" {
+		p.Input.Forwarded.requestKeyframe()
+	}
+}
 func (m *media) onConnected() {
 	if m.pub != nil {
 		m.pub.start()

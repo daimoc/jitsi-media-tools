@@ -130,6 +130,12 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 	return in, answer, nil
 }
 
+// CheckOffer returns the media kinds an Ingest would forward from offer,
+// or ErrUnsupportedOffer, without creating anything.
+func CheckOffer(offer string) ([]string, error) {
+	return registerOffered(&webrtc.MediaEngine{}, offer)
+}
+
 // registerOffered registers the offer's H.264 (packetization mode 1) and
 // Opus formats as they are, whatever their profile, and returns the kinds
 // the offer sends.

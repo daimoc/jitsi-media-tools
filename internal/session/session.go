@@ -62,6 +62,9 @@ type Config struct {
 	// Receive makes the session ready to decode what it receives for
 	// callbacks set later (SetOnVideo…), checking the decoders at Start.
 	Receive bool
+	// SendOnly asks the bridge for no video (a gateway participant); the
+	// selection is ignored.
+	SendOnly bool
 
 	Logger  *slog.Logger
 	OnEvent func(Event)                  // Participant events; must not block
@@ -164,6 +167,7 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 		Kinds:       s.media.publishKinds(),
 		VideoHeight: cfg.Selection.Height,
 		VideoWidth:  s.media.publishWidth(), VideoHeightSent: s.media.publishHeight(),
+		VideoCodec: s.media.publishCodec(),
 	})
 	if err != nil {
 		s.media.stop()
@@ -211,7 +215,7 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	if s.cfg.Display != nil {
 		s.cfg.NeedFFplay = true
 	}
-	if len(s.cfg.FFmpegNeeds) == 0 && s.cfg.Publish == nil && !s.cfg.NeedFFplay && !s.cfg.receives() {
+	if len(s.cfg.FFmpegNeeds) == 0 && !s.cfg.encodes() && !s.cfg.NeedFFplay && !s.cfg.receives() {
 		return t, nil
 	}
 	bin, err := ffmpeg.Locate("ffmpeg", s.cfg.FFmpeg)
@@ -223,7 +227,7 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 		return t, err
 	}
 	needs := s.cfg.FFmpegNeeds
-	if s.cfg.Publish != nil {
+	if s.cfg.encodes() {
 		needs = append(slices.Clone(needs), publishNeeds...)
 	}
 	if s.cfg.receives() {

@@ -37,6 +37,10 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 	if err := p.Input.check(); err != nil {
 		return err
 	}
+	if p.Input.Kind == "forward" {
+		m.pub = &publisher{m: m, pub: p}
+		return nil
+	}
 	if f := p.Input.Frames; p.Input.Kind == "frames" {
 		p.Audio, p.Video = f.Audio, f.Video
 		if f.Video {
@@ -76,6 +80,14 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 func (pb *publisher) start() {
 	pb.once.Do(func() {
 		s := pb.m.s
+		if pb.pub.Input.Kind == "forward" {
+			tracks := map[string]peer.RTPWriter{}
+			for _, kind := range pb.m.publishKinds() {
+				tracks[kind] = s.peer.LocalTrack(kind)
+			}
+			pb.pub.Input.Forwarded.connect(tracks)
+			return
+		}
 		if pb.video != nil {
 			pb.pump(peer.KindVideo, rtpmedia.NewVideoSender(s.peer.LocalTrack(peer.KindVideo)), pb.video, rtpmedia.VideoPlaceholder(pb.black))
 		}
