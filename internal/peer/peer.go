@@ -53,6 +53,9 @@ type Config struct {
 	VideoHeight int
 	// VideoWidth and VideoHeightSent are the size of the sent video.
 	VideoWidth, VideoHeightSent int
+	// VideoCodec is the codec of the sent video: "" or webrtc.MimeTypeVP8,
+	// or webrtc.MimeTypeH264 for H.264 forwarded as it came (Ingest).
+	VideoCodec string
 }
 
 // RemoteTrack is a received remote stream.
@@ -113,8 +116,8 @@ type Peer struct {
 
 var _ signaling.SignalingHandler = (*Peer)(nil)
 
-// New creates a peer with one send track per kind of cfg.Kinds: VP8 video
-// and Opus audio.
+// New creates a peer with one send track per kind of cfg.Kinds: VP8 (or
+// cfg.VideoCodec) video and Opus audio.
 func New(cfg Config) (*Peer, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
@@ -156,6 +159,9 @@ func (p *Peer) addLocalTracks() error {
 		codec := OpusCodec
 		if kind == KindVideo {
 			codec = VP8Codec
+			if p.cfg.VideoCodec == webrtc.MimeTypeH264 {
+				codec = H264Codec
+			}
 		}
 		track, err := webrtc.NewTrackLocalStaticRTP(codec, kind, streamID)
 		if err != nil {
