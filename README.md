@@ -18,6 +18,29 @@ Rooms can hold up to 100 participants. To stay usable on a laptop, the tool rece
 everyone's audio but video from only the 9 most recent speakers, at low resolution, plus
 any participants you pin by display name.
 
+## How it works
+
+![Media pipeline: publish source, ffmpeg encoder, RTP sender and WebRTC peer out to the Jitsi
+Videobridge; received RTP through the frame assembler and one ffmpeg decoder per stream into
+the room's tile grid and audio mix, then to the window, library callbacks, recording and SRT
+feeds](docs/media-pipeline.svg)
+
+- **Publish**: one ffmpeg process encodes the source to VP8 and Opus. Go reads the encoded
+  frames, paces them in real time and sends them as RTP over a Pion WebRTC connection to the
+  Videobridge.
+- **Receive**: Go rebuilds each received video stream into whole frames, releasing each
+  frame as soon as its last packet arrives, and wraps audio packets as Ogg. Then one ffmpeg
+  process per stream decodes it to raw video or audio.
+- **Room**: the decoded frames are drawn into a 1280x720 tile grid at 30 fps, and the audio
+  is mixed. Each participant's screen share gets its own tile. The window plays the grid and
+  the mix through ffplay, and the library callbacks get the same media.
+- **Signaling**: XMPP over WebSocket with Jicofo and Prosody. Jingle offers become SDP for
+  the WebRTC connection, and presence tells the tool who is in the room, their names and
+  whether each source is muted.
+
+[docs/latency.md](docs/latency.md) measures how long media takes through each stage, and
+what was changed to make it faster.
+
 ## Status
 
 Work in progress: feature `specs/001-jitsi-media-session`.
@@ -81,6 +104,36 @@ fit `--publish-size` (1280x720 by default) and padded, at 30 fps, and Opus audio
 file has no video or no audio, only the kind it has is published. If the source has a gap,
 or ffmpeg restarts, the room sees a black picture and hears silence; the participant does
 not drop out.
+
+### Watch and listen to the room
+
+```bash
+# Receive only: show the room in a window
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Viewer --display
+
+# Publish and receive at the same time
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Clip \
+  --publish file-loop:samples/clip.mp4 --display
+```
+
+`--display` opens an ffplay window showing the room as a Jitsi-style tile grid
+(1280x720, 30 fps). You hear everyone's audio mixed together. Each participant gets a
+tile, and a screen share gets its own tile, named "<name> (screen)", until the share stops.
+Participants without video show a name card. The grid shows at most `--video-limit` tiles,
+those with video first. Closing the window leaves the room. Your own published media is not
+shown or played back to you.
+
+What the tool can do with received media:
+
+| Output | How | State |
+|---|---|---|
+| Tile-grid window and mixed audio | `--display` (needs ffplay) | Done |
+| Decoded frames and samples, per participant, the grid and the mix | Library callbacks: `OnVideo`, `OnAudio`, `OnGrid`, `OnMixedAudio` | Done |
+| Recording: one `.mkv` per participant, or one mixed file | `--record DIR --record-mode per-participant\|mixed` | Not yet |
+| SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-port`, `--obs-max-feeds` | Not yet |
+
+Received media is decoded only while an output uses it. Without `--display`, the command
+line only publishes and prints who joins and leaves.
 
 ### Choose the video you receive
 

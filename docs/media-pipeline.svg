@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 610" width="1100" height="610" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>jitsi-media-tools media pipeline</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .lane { fill: #f3f5f8; }
+    .box { fill: #ffffff; stroke: #8a94a6; stroke-width: 1.2; }
+    .ff { fill: #fff6e6; stroke: #c98a1b; }
+    .srv { fill: #eef4ff; stroke: #4a6fb5; }
+    .planned { stroke-dasharray: 5 4; fill: none; }
+    .t { fill: #1f2733; font-size: 14px; font-weight: 600; text-anchor: middle; }
+    .s { fill: #4b5566; font-size: 11.5px; text-anchor: middle; }
+    .lbl { fill: #6b7486; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; }
+    .media { stroke: #2f3a4c; stroke-width: 1.6; fill: none; }
+    .sig { stroke: #4a6fb5; stroke-width: 1.4; fill: none; stroke-dasharray: 6 4; }
+    .head { fill: #2f3a4c; }
+    .shead { fill: #4a6fb5; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .lane { fill: #161b22; }
+      .box { fill: #0d1117; stroke: #6e7681; }
+      .ff { fill: #2a2112; stroke: #d29922; }
+      .srv { fill: #121d33; stroke: #6e96e0; }
+      .planned { fill: none; }
+      .t { fill: #e6edf3; }
+      .s { fill: #9da7b3; }
+      .lbl { fill: #8b949e; }
+      .media { stroke: #c9d1d9; }
+      .sig { stroke: #6e96e0; }
+      .head { fill: #c9d1d9; }
+      .shead { fill: #6e96e0; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="head"/>
+    </marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="shead"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1100" height="610"/>
+  <text class="t" x="420" y="32" style="font-size:17px">jitsi-media-tools media pipeline</text>
+
+  <!-- Jitsi server -->
+  <rect class="box srv" x="840" y="52" width="245" height="373" rx="10"/>
+  <text class="t" x="962" y="72">Jitsi Meet server</text>
+  <rect class="box" x="850" y="212" width="100" height="74" rx="6"/>
+  <text class="t" x="900" y="236">Jicofo</text>
+  <text class="s" x="900" y="255">Prosody</text>
+  <text class="s" x="900" y="271">(XMPP)</text>
+  <rect class="box" x="965" y="86" width="110" height="328" rx="6"/>
+  <text class="t" x="1020" y="236">Videobridge</text>
+  <text class="s" x="1020" y="255">forwards RTP,</text>
+  <text class="s" x="1020" y="271">video selection</text>
+
+  <!-- Publish lane -->
+  <rect class="lane" x="10" y="52" width="810" height="116" rx="8"/>
+  <text class="lbl" x="22" y="70">PUBLISH</text>
+
+  <rect class="box" x="20" y="82" width="150" height="74" rx="6"/>
+  <text class="t" x="95" y="106">Publish source</text>
+  <text class="s" x="95" y="125">file · camera + mic</text>
+  <text class="s" x="95" y="141">OBS · jmt.FrameSource</text>
+
+  <rect class="box ff" x="215" y="82" width="170" height="74" rx="6"/>
+  <text class="t" x="300" y="106">ffmpeg encoder</text>
+  <text class="s" x="300" y="125">VP8 → IVF on stdout</text>
+  <text class="s" x="300" y="141">Opus → Ogg on TCP</text>
+
+  <rect class="box" x="430" y="82" width="165" height="74" rx="6"/>
+  <text class="t" x="512" y="106">Sender (rtpmedia)</text>
+  <text class="s" x="512" y="125">parse IVF / Ogg frames</text>
+  <text class="s" x="512" y="141">pace, packetize to RTP</text>
+
+  <rect class="box" x="640" y="82" width="150" height="74" rx="6"/>
+  <text class="t" x="715" y="106">WebRTC peer</text>
+  <text class="s" x="715" y="125">Pion: video + audio</text>
+  <text class="s" x="715" y="141">track, ICE, DTLS-SRTP</text>
+
+  <path class="media" d="M170,119 H213" marker-end="url(#a)"/>
+  <path class="media" d="M385,119 H428" marker-end="url(#a)"/>
+  <path class="media" d="M595,119 H638" marker-end="url(#a)"/>
+  <path class="media" d="M790,119 H963" marker-end="url(#a)"/>
+  <text class="s" x="877" y="111">RTP</text>
+
+  <!-- Signaling -->
+  <rect class="box srv" x="640" y="212" width="150" height="74" rx="6"/>
+  <text class="t" x="715" y="236">Signaling (jitsi)</text>
+  <text class="s" x="715" y="255">XMPP over WebSocket</text>
+  <text class="s" x="715" y="271">Jingle ↔ SDP, presence</text>
+  <path class="sig" d="M715,158 V210" marker-start="url(#b)" marker-end="url(#b)"/>
+  <path class="sig" d="M715,288 V316" marker-end="url(#b)"/>
+  <path class="sig" d="M792,249 H848" marker-start="url(#b)" marker-end="url(#b)"/>
+
+  <!-- Receive lane -->
+  <rect class="lane" x="10" y="318" width="810" height="116" rx="8"/>
+  <text class="lbl" x="22" y="336">RECEIVE</text>
+
+  <rect class="box" x="640" y="348" width="150" height="74" rx="6"/>
+  <text class="t" x="715" y="372">WebRTC peer</text>
+  <text class="s" x="715" y="391">one RTP track</text>
+  <text class="s" x="715" y="407">per received stream</text>
+
+  <rect class="box" x="430" y="348" width="165" height="74" rx="6"/>
+  <text class="t" x="512" y="372">Frame assembler</text>
+  <text class="s" x="512" y="391">(rtpmedia) frame at marker</text>
+  <text class="s" x="512" y="407">→ IVF · Annex B · Ogg</text>
+
+  <rect class="box ff" x="215" y="348" width="170" height="74" rx="6"/>
+  <text class="t" x="300" y="372">ffmpeg decoder</text>
+  <text class="s" x="300" y="391">one per stream, on stdin</text>
+  <text class="s" x="300" y="407">→ yuv420p · s16le 48 kHz</text>
+
+  <rect class="box" x="20" y="348" width="150" height="74" rx="6"/>
+  <text class="t" x="95" y="372">Room (compose)</text>
+  <text class="s" x="95" y="391">tile grid 1280×720</text>
+  <text class="s" x="95" y="407">30 fps + audio mix</text>
+
+  <path class="media" d="M963,385 H792" marker-end="url(#a)"/>
+  <text class="s" x="877" y="377">RTP</text>
+  <path class="media" d="M640,385 H597" marker-end="url(#a)"/>
+  <path class="media" d="M430,385 H387" marker-end="url(#a)"/>
+  <path class="media" d="M215,385 H172" marker-end="url(#a)"/>
+
+  <!-- Outputs -->
+  <text class="lbl" x="22" y="462">OUTPUTS</text>
+  <path class="media" d="M95,422 V448 H680"/>
+  <path class="media" d="M110,448 V470" marker-end="url(#a)"/>
+  <path class="media" d="M300,448 V470" marker-end="url(#a)"/>
+  <path class="media" d="M490,448 V470" marker-end="url(#a)"/>
+  <path class="media" d="M680,448 V470" marker-end="url(#a)"/>
+
+  <rect class="box" x="20" y="472" width="180" height="70" rx="6"/>
+  <text class="t" x="110" y="496">Window</text>
+  <text class="s" x="110" y="515">NUT on stdin → ffplay</text>
+  <text class="s" x="110" y="531">(--display)</text>
+
+  <rect class="box" x="210" y="472" width="180" height="70" rx="6"/>
+  <text class="t" x="300" y="496">Library callbacks</text>
+  <text class="s" x="300" y="515">OnVideo · OnAudio</text>
+  <text class="s" x="300" y="531">OnGrid · OnMixedAudio</text>
+
+  <rect class="box planned" x="400" y="472" width="180" height="70" rx="6"/>
+  <text class="t" x="490" y="496">Recording</text>
+  <text class="s" x="490" y="515">.mkv per participant</text>
+  <text class="s" x="490" y="531">or mixed (planned)</text>
+
+  <rect class="box planned" x="590" y="472" width="180" height="70" rx="6"/>
+  <text class="t" x="680" y="496">SRT feeds</text>
+  <text class="s" x="680" y="515">for OBS Media Sources</text>
+  <text class="s" x="680" y="531">(planned)</text>
+
+  <!-- Legend -->
+  <path class="media" d="M22,580 H62" marker-end="url(#a)"/>
+  <text class="s" x="68" y="584" style="text-anchor:start">media</text>
+  <path class="sig" d="M130,580 H170" marker-end="url(#b)"/>
+  <text class="s" x="176" y="584" style="text-anchor:start">signaling</text>
+  <rect class="box ff" x="258" y="572" width="22" height="16" rx="3"/>
+  <text class="s" x="286" y="584" style="text-anchor:start">ffmpeg process</text>
+  <rect class="box planned" x="392" y="572" width="22" height="16" rx="3"/>
+  <text class="s" x="420" y="584" style="text-anchor:start">planned</text>
+</svg>
