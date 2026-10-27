@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -113,6 +114,19 @@ func TestEncoderArgs(t *testing.T) {
 	}
 	if args[0] != "-hide_banner" || !slices.Contains(args, "clip.mp4") {
 		t.Errorf("unexpected args %v", args)
+	}
+}
+
+func TestEncoderArgs_ConstantRateSkipsFPSFilter(t *testing.T) {
+	vf := func(o ffmpeg.EncodeOptions) string {
+		args := ffmpeg.EncoderArgs([]string{"-i", "pipe:0"}, o, "")
+		return args[slices.Index(args, "-vf")+1]
+	}
+	if f := vf(ffmpeg.EncodeOptions{Video: true}); !strings.Contains(f, "fps=") {
+		t.Errorf("filter %q lacks fps=", f)
+	}
+	if f := vf(ffmpeg.EncodeOptions{Video: true, ConstantRate: true}); strings.Contains(f, "fps=") {
+		t.Errorf("constant-rate filter %q has fps=", f)
 	}
 }
 

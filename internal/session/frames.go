@@ -13,11 +13,14 @@ import (
 	"github.com/daimoc/jitsi-media-tools/internal/output"
 )
 
-// Frame queue depths: about 0.3 s of video and 0.4 s of audio wait for the
-// encoder before the oldest is dropped.
+// Frame queue depths: 2 frames (67 ms) of video and 2 chunks (40 ms) of
+// audio wait for the encoder before the oldest is dropped. The queues fill
+// while an encoder starts, and the sender paces what was queued at real
+// time, so whatever they hold then stays as latency for the whole run
+// (docs/latency.md).
 const (
-	framesVideoQueue = 10
-	framesAudioQueue = 20
+	framesVideoQueue = 2
+	framesAudioQueue = 2
 )
 
 // ErrFramesClosed is returned by writes after Frames.Close.
@@ -107,8 +110,8 @@ type framesRun struct {
 	lb    *ffmpeg.Loopback
 }
 
-// openFrames prepares an encoder run's raw inputs: video on stdin, audio
-// on a loopback socket the encoder connects to.
+// openFrames prepares an encoder run's inputs: raw video on stdin, audio
+// as NUT on a loopback socket the encoder connects to.
 func openFrames(f *Frames) (*framesRun, error) {
 	r := &framesRun{f: f}
 	if f.Video {
@@ -126,7 +129,7 @@ func openFrames(f *Frames) (*framesRun, error) {
 			return nil, err
 		}
 		r.lb = lb
-		r.args = append(r.args, "-f", "s16le", "-ar", strconv.Itoa(ffmpeg.DecodedSampleRate), "-ac", "2", "-i", lb.URL())
+		r.args = append(r.args, "-f", "nut", "-i", lb.URL()) // See output.AudioNUT
 	}
 	return r, nil
 }
@@ -138,8 +141,7 @@ func (r *framesRun) feed(ctx context.Context, wg *sync.WaitGroup) {
 		r.stdin.Close() // The encoder holds its own copy
 		r.stdin = nil
 	}
-	send := func(q *output.Queue[[]byte], w io.WriteCloser) {
-		defer w.Close()
+	send := func(q *output.Queue[[]byte], w io.Writer) {
 		for {
 			b, ok := q.Pop(ctx)
 			if !ok {
@@ -154,6 +156,7 @@ func (r *framesRun) feed(ctx context.Context, wg *sync.WaitGroup) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer r.video.Close()
 			send(r.f.video, r.video)
 		}()
 	}
@@ -166,7 +169,8 @@ func (r *framesRun) feed(ctx context.Context, wg *sync.WaitGroup) {
 			if err != nil {
 				return
 			}
-			send(r.f.audio, conn)
+			defer conn.Close()
+			send(r.f.audio, output.NewAudioNUT(conn))
 		}()
 	}
 }

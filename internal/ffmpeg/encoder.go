@@ -28,6 +28,9 @@ const (
 type EncodeOptions struct {
 	Audio, Video  bool // Kinds encoded; at least one
 	Width, Height int  // Video size; the picture is scaled to fit and padded. Default 1280x720
+	// ConstantRate says the video input already comes at PublishFPS, so no
+	// fps filter is needed; that filter holds each frame until the next.
+	ConstantRate bool
 }
 
 func (o EncodeOptions) size() (int, int) {
@@ -45,7 +48,11 @@ func EncoderArgs(input []string, o EncodeOptions, audioURL string) []string {
 	if o.Video {
 		w, h := o.size()
 		vf := fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=decrease:force_divisible_by=2,"+
-			"pad=%d:%d:(ow-iw)/2:(oh-ih)/2,fps=%d,format=yuv420p", w, h, w, h, PublishFPS)
+			"pad=%d:%d:(ow-iw)/2:(oh-ih)/2,", w, h, w, h)
+		if !o.ConstantRate {
+			vf += fmt.Sprintf("fps=%d,", PublishFPS)
+		}
+		vf += "format=yuv420p"
 		args = append(args, "-map", "0:v:0", "-vf", vf,
 			"-c:v", "libvpx", "-deadline", "realtime", "-cpu-used", "8", "-lag-in-frames", "0",
 			"-error-resilient", "1", "-auto-alt-ref", "0",

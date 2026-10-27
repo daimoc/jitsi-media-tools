@@ -11,12 +11,13 @@ import (
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 )
 
-// Display queue depths: about 0.1 s of video and 0.2 s of audio wait for a
+// Display queue depths: 1 frame of video and 40 ms of audio wait for a
 // slow window before the oldest is dropped, so a slow window stays late by
-// at most that much.
+// at most that much. A deeper queue keeps a standing backlog once it has
+// filled (docs/latency.md).
 const (
-	displayVideoQueue = 3
-	displayAudioQueue = 10
+	displayVideoQueue = 1
+	displayAudioQueue = 2
 )
 
 // Audio chunk and video frame intervals the display is written at.

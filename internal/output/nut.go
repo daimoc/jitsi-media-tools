@@ -9,10 +9,10 @@ import (
 )
 
 // nutWriter writes raw yuv420p video (stream 0) and s16le 48 kHz stereo
-// audio (stream 1) as a NUT stream (libavformat/nut.txt), each packet
-// stamped with its own time. With raw inputs ffmpeg would count frames and
-// samples instead, and a stream that started later or lost a packet would
-// stay behind the other.
+// audio (stream 1, or 0 without video) as a NUT stream
+// (libavformat/nut.txt), each packet stamped with its own time. With raw
+// inputs ffmpeg would count frames and samples instead, and a stream that
+// started later or lost a packet would stay behind the other.
 type nutWriter struct {
 	w       io.Writer
 	width   int
@@ -40,15 +40,49 @@ const (
 	nutMaxDistance = 65536
 )
 
+// newNUTWriter writes video of width×height and audio; a width of 0 means
+// audio only.
 func newNUTWriter(w io.Writer, width, height int) *nutWriter {
 	return &nutWriter{w: w, width: width, height: height}
+}
+
+// AudioNUT writes s16le 48 kHz stereo as an audio-only NUT stream, one
+// packet per Write, timed by the samples written before. ffmpeg reads raw
+// s16le in 85 ms blocks, so it would encode audio that much later; it
+// reads a NUT packet as soon as it comes.
+type AudioNUT struct {
+	n       *nutWriter
+	samples int64 // Per channel, written so far
+}
+
+// NewAudioNUT writes to w.
+func NewAudioNUT(w io.Writer) *AudioNUT { return &AudioNUT{n: newNUTWriter(w, 0, 0)} }
+
+// Write writes samples as one packet.
+func (a *AudioNUT) Write(samples []byte) (int, error) {
+	at := time.Duration(a.samples) * time.Second / ffmpeg.DecodedSampleRate
+	if err := a.n.audio(at, samples); err != nil {
+		return 0, err
+	}
+	a.samples += int64(len(samples) / 4) // s16 stereo
+	return len(samples), nil
 }
 
 // video writes a frame (width×height yuv420p) at time at.
 func (n *nutWriter) video(at time.Duration, frame []byte) error { return n.frame(0, at, frame) }
 
 // audio writes samples at time at.
-func (n *nutWriter) audio(at time.Duration, samples []byte) error { return n.frame(1, at, samples) }
+func (n *nutWriter) audio(at time.Duration, samples []byte) error {
+	return n.frame(n.streams()-1, at, samples)
+}
+
+// streams is the number of streams: audio, after video if any.
+func (n *nutWriter) streams() int {
+	if n.width == 0 {
+		return 1
+	}
+	return 2
+}
 
 func (n *nutWriter) frame(stream int, at time.Duration, data []byte) error {
 	b := n.buf[:0]
@@ -84,8 +118,8 @@ func (n *nutWriter) headers(b []byte) []byte {
 	b = append(b, nutFileID...)
 
 	var m []byte
-	m = putV(m, 3)              // Version
-	m = putV(m, 2)              // Streams
+	m = putV(m, 3) // Version
+	m = putV(m, uint64(n.streams()))
 	m = putV(m, nutMaxDistance) // max_distance
 	m = putV(m, 1)              // Time bases
 	m = putV(m, 1)
@@ -104,21 +138,23 @@ func (n *nutWriter) headers(b []byte) []byte {
 	b = nutPacket(b, nutMainStartcode, m)
 
 	var s []byte
-	s = putV(s, 0) // Stream 0
-	s = putV(s, 0) // Video
-	s = putV(s, 4)
-	s = append(s, "I420"...) // rawvideo yuv420p
-	s = nutStreamCommon(s)
-	s = putV(s, uint64(n.width))
-	s = putV(s, uint64(n.height))
-	s = putV(s, 0) // Aspect ratio unknown
-	s = putV(s, 0)
-	s = putV(s, 0) // Colorspace unknown
-	b = nutPacket(b, nutStreamStartcode, s)
+	if n.width != 0 {
+		s = putV(s, 0) // Stream 0
+		s = putV(s, 0) // Video
+		s = putV(s, 4)
+		s = append(s, "I420"...) // rawvideo yuv420p
+		s = nutStreamCommon(s)
+		s = putV(s, uint64(n.width))
+		s = putV(s, uint64(n.height))
+		s = putV(s, 0) // Aspect ratio unknown
+		s = putV(s, 0)
+		s = putV(s, 0) // Colorspace unknown
+		b = nutPacket(b, nutStreamStartcode, s)
+	}
 
 	s = s[:0]
-	s = putV(s, 1) // Stream 1
-	s = putV(s, 1) // Audio
+	s = putV(s, uint64(n.streams()-1)) // Audio stream
+	s = putV(s, 1)                     // Audio
 	s = putV(s, 4)
 	s = append(s, 'P', 'S', 'D', 16) // pcm_s16le
 	s = nutStreamCommon(s)

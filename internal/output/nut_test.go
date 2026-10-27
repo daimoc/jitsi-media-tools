@@ -80,3 +80,30 @@ func TestNUTWriter_ReadByFFmpeg(t *testing.T) {
 		t.Errorf("first video at %v, audio from %v to %v; want 0.5, 0 and 0.98", video[0], audio[0], audio[49])
 	}
 }
+
+func TestAudioNUT_OnePacketPerChunk(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	var buf bytes.Buffer
+	w := NewAudioNUT(&buf)
+	chunk := make([]byte, ffmpeg.DecodedChunkBytes)
+	for i := 0; i < 10; i++ {
+		if _, err := w.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "audio.nut")
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info, err := exec.Command(bin, "-hide_banner", "-i", path, "-f", "null", "-").CombinedOutput()
+	if err != nil {
+		t.Fatalf("ffmpeg cannot read the stream: %v: %s", err, info)
+	}
+	if s := string(info); strings.Contains(s, "Video:") || !strings.Contains(s, "Audio: pcm_s16le") || !strings.Contains(s, "48000 Hz, stereo") {
+		t.Fatalf("streams not as written:\n%s", s)
+	}
+	pkts := probePackets(t, path)
+	if len(pkts) != 10 || pkts[0] != "0,0.000000" || pkts[9] != "0,0.180000" {
+		t.Errorf("packets %v, want 10 on stream 0 from 0 to 0.18 s", pkts)
+	}
+}

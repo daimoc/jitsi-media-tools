@@ -62,7 +62,10 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   file (`-re`, `-stream_loop -1` for loop), devices (per-OS input format, R6), OBS
   (`-listen 1 -i rtmp://0.0.0.0:<port>/live/obs` or `-i srt://0.0.0.0:<port>?mode=listener`),
   or library frames (`-f rawvideo -pix_fmt yuv420p -s WxH -r 30 -i pipe:0` plus
-  `-f s16le -ar 48000 -ac 2 -i tcp://…`). The encoder outputs VP8 (libvpx, realtime,
+  s16le 48 kHz stereo as NUT, `-f nut -i tcp://…`, one packet per 20 ms chunk: ffmpeg
+  reads raw `-f s16le` in 85 ms blocks; revised 2026-10-25, docs/latency.md). Library
+  frames skip the `fps` filter, which holds each frame until the next one, and wait in
+  2-item queues. The encoder outputs VP8 (libvpx, realtime,
   `-deadline realtime -cpu-used 8 -lag-in-frames 0 -error-resilient 1`, keyframe every 2 s)
   as IVF to stdout and Opus (48 kHz, 20 ms frames) as Ogg to a loopback socket. Go parses
   IVF/Ogg frames (parsers copied from `src/media/content.go`) and paces them into

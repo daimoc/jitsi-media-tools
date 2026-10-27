@@ -175,6 +175,7 @@ func (pb *publisher) startEncoder(ctx context.Context) (*ffmpeg.Process, error) 
 			return nil, err
 		}
 		cfg.Input = frames.args
+		cfg.Options.ConstantRate = true // Raw frames at -r PublishFPS
 		if frames.stdin != nil {
 			cfg.Stdin = frames.stdin
 		}
