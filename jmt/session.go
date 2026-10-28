@@ -64,6 +64,9 @@ func (o Options) sessionConfig() (session.Config, error) {
 	if o.Display != nil {
 		cfg.Display = &session.DisplayOptions{Title: o.Display.Title}
 	}
+	if o.Record != nil {
+		cfg.Record = &session.RecordOptions{Dir: o.Record.Dir, Mixed: o.Record.Mode == RecordMixed}
+	}
 	if o.OBS != nil {
 		cfg.OBS = &session.OBSOptions{Host: o.OBS.Host, BasePort: o.OBS.BasePort, MaxFeeds: o.OBS.MaxFeeds, Grid: o.OBS.Grid}
 	}
@@ -83,6 +86,8 @@ func eventFrom(e session.Event) Event {
 		k = ParticipantLeft
 	case session.EventFeedReady:
 		return Event{Kind: FeedReady, Participant: participantFrom(e.Participant), FeedURL: e.FeedURL}
+	case session.EventRecordingStarted:
+		return Event{Kind: RecordingStarted, Participant: participantFrom(e.Participant), Path: e.Path}
 	}
 	return Event{Kind: k, Participant: participantFrom(e.Participant)}
 }

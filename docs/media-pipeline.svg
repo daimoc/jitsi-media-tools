@@ -141,10 +141,10 @@
   <text class="s" x="300" y="515">OnVideo · OnAudio</text>
   <text class="s" x="300" y="531">OnGrid · OnMixedAudio</text>
 
-  <rect class="box planned" x="400" y="472" width="180" height="70" rx="6"/>
+  <rect class="box" x="400" y="472" width="180" height="70" rx="6"/>
   <text class="t" x="490" y="496">Recording</text>
   <text class="s" x="490" y="515">.mkv per participant</text>
-  <text class="s" x="490" y="531">or mixed (planned)</text>
+  <text class="s" x="490" y="531">or mixed (--record)</text>
 
   <rect class="box" x="590" y="472" width="180" height="70" rx="6"/>
   <text class="t" x="680" y="496">SRT feeds</text>
@@ -158,6 +158,4 @@
   <text class="s" x="176" y="584" style="text-anchor:start">signaling</text>
   <rect class="box ff" x="258" y="572" width="22" height="16" rx="3"/>
   <text class="s" x="286" y="584" style="text-anchor:start">ffmpeg process</text>
-  <rect class="box planned" x="392" y="572" width="22" height="16" rx="3"/>
-  <text class="s" x="420" y="584" style="text-anchor:start">planned</text>
 </svg>

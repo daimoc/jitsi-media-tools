@@ -46,7 +46,8 @@ const (
 	ParticipantLeft
 	ParticipantChanged
 	WaitingForHost
-	FeedReady // An OBS feed address is available
+	FeedReady        // An OBS feed address is available
+	RecordingStarted // A recording's file is being written
 )
 
 func (k EventKind) String() string {
@@ -61,6 +62,8 @@ func (k EventKind) String() string {
 		return "waiting for host"
 	case FeedReady:
 		return "feed ready"
+	case RecordingStarted:
+		return "recording started"
 	}
 	return "unknown"
 }
@@ -70,4 +73,5 @@ type Event struct {
 	Kind        EventKind
 	Participant Participant
 	FeedURL     string // FeedReady only; Participant is empty for the grid feed
+	Path        string // RecordingStarted only; Participant is empty for the mixed recording
 }

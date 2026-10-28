@@ -107,12 +107,14 @@ const (
     ParticipantLeft
     ParticipantChanged
     WaitingForHost
-    FeedReady // OBS feed address available
+    FeedReady        // OBS feed address available
+    RecordingStarted // a recording's file is being written
 )
 type Event struct {
     Kind        EventKind
     Participant Participant
     FeedURL     string // FeedReady only; "" participant id means the grid
+    Path        string // RecordingStarted only; "" participant id means the mixed file
 }
 
 // Join connects and joins the room; it returns once joined (or failed),

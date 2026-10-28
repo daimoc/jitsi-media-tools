@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os/exec"
+	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -251,5 +254,44 @@ func TestJoin_OBSFeeds(t *testing.T) {
 	}
 	if urls := s.FeedURLs(); urls[""] != grid || urls["Alice"] != alice {
 		t.Errorf("FeedURLs() = %v", urls)
+	}
+}
+
+// TestJoin_Record checks T059: with Record options, Alice's recording is
+// announced with its file, which plays once the session is closed.
+func TestJoin_Record(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	caps, err := ffmpeg.Probe(context.Background(), bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caps.Missing(ffmpeg.NeedH264Encoder, ffmpeg.NeedAACEncoder); err != nil {
+		t.Skip(err)
+	}
+	fakeRoom(t, true)
+	dir := t.TempDir()
+	s, err := Join(context.Background(), Options{MeetingURL: "https://meet.test/Room", DisplayName: "Lib", Logger: quiet,
+		Record: &RecordOptions{Dir: dir, Mode: RecordPerParticipant}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var path string
+	for deadline := time.Now().Add(10 * time.Second); path == "" && time.Now().Before(deadline); {
+		select {
+		case e := <-s.Events():
+			if e.Kind == RecordingStarted && e.Participant.Name == "Alice" {
+				path = e.Path
+			}
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	if filepath.Dir(path) != dir || !strings.HasSuffix(path, "-Alice.mkv") {
+		t.Fatalf("recording of Alice at %q, want a file in %s", path, dir)
+	}
+	time.Sleep(time.Second)
+	s.Close()
+	if out, err := exec.Command(bin, "-hide_banner", "-i", path, "-f", "null", "-").CombinedOutput(); err != nil || !strings.Contains(string(out), "Video: h264") {
+		t.Errorf("decoding %s: %v\n%s", path, err, out)
 	}
 }

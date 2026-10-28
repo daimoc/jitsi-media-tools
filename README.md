@@ -57,7 +57,7 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | Publish a camera and microphone (`device:`) | Not yet |
 | Stream OBS into meetings: WHIP gateway (`serve`) | Done |
 | Tile-grid window (`--display`) | Done |
-| Recording (`--record`) | Not yet |
+| Recording (`--record`) | Done |
 | SRT feeds for OBS (`--obs`, `--obs-grid`) | Done |
 | Decoded frames and samples in the library | Done |
 
@@ -136,10 +136,10 @@ What the tool can do with received media:
 |---|---|---|
 | Tile-grid window and mixed audio | `--display` (needs ffplay) | Done |
 | Decoded frames and samples, per participant, the grid and the mix | Library callbacks: `OnVideo`, `OnAudio`, `OnGrid`, `OnMixedAudio` | Done |
-| Recording: one `.mkv` per participant, or one mixed file | `--record DIR --record-mode per-participant\|mixed` | Not yet |
+| Recording: one `.mkv` per participant, or one mixed file | `--record DIR --record-mode per-participant\|mixed` | Done |
 | SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-port`, `--obs-max-feeds` | Done |
 
-Received media is decoded only while an output uses it. Without `--display` or `--obs`, the
+Received media is decoded only while an output uses it. Without `--display`, `--record` or `--obs`, the
 command line only publishes and prints who joins and leaves.
 
 ### Bring the meeting into OBS (SRT feeds)
@@ -171,6 +171,37 @@ example `srt://192.0.2.10:9001`.
 - **CPU:** a feed only encodes while OBS is connected to it.
 - **Ports:** the grid is on `--obs-port` (9000 by default) and participants on the next
   ports, all UDP. `--obs-host` sets the address to listen on (every interface by default).
+
+### Record the meeting
+
+```bash
+# One file per participant
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Recorder --record ./rec
+# One file of the tile grid and the mixed audio
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Recorder --record ./rec --record-mode mixed
+```
+
+The command prints each file as it starts:
+
+```text
++ Alice
+record Alice ./rec/myroom-20261028-091500-Alice.mkv
+```
+
+- **Files:** `<room>-<start time>-<name>.mkv` in the directory, created if needed, or
+  `…-mixed.mkv`. Characters that cannot be in a file name, such as `/`, become `_`.
+- **Who gets a file:** each participant from their first video or audio. A participant who
+  never sends media gets none. A participant who leaves and comes back keeps their file,
+  which shows their name card while they are away.
+- **What a file holds:** H.264 and AAC in Matroska. A participant's file is 640x360 (1280x720
+  when pinned with `--pin`), the mixed file 1280x720 at 30 fps, with silence while nobody
+  speaks.
+- **Stopping:** Ctrl+C finishes every file within a second or two, and they play anywhere. If
+  the tool is killed instead, a file still plays up to its last second or so.
+- **With `--obs`:** `feeds.json` in the same directory lists the feed addresses, for
+  example `{"Alice": "srt://192.0.2.10:9001"}`.
+- **CPU:** each file is encoded by its own ffmpeg, so recording a participant who also has an
+  OBS feed encodes them twice while OBS watches.
 
 ### Stream OBS into a meeting (WHIP gateway)
 

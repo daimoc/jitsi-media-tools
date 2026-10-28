@@ -48,7 +48,8 @@ one line per stream: `+ OBS meet.example.org/MyRoom`, `- OBS meet.example.org/My
 ## Output
 
 - stdout, one line per event: `joined room R as NAME`, `waiting for host…`,
-  `+ Alice`, `- Alice`, `feed Alice srt://192.0.2.10:9001`.
+  `+ Alice`, `- Alice`, `feed Alice srt://192.0.2.10:9001`,
+  `record Alice /tmp/rec/myroom-20261028-091500-Alice.mkv` (`record mixed …` for the mixed file).
 - stderr: logs (`slog` text).
 - Exit codes: 0 after Ctrl+C or end of a once-played file; 1 on join failure,
   lost connection or missing ffmpeg; 2 on bad flags.

@@ -134,5 +134,11 @@ func printEvent(w io.Writer, e jmt.Event) {
 			name = "grid"
 		}
 		fmt.Fprintf(w, "feed %s %s\n", name, e.FeedURL)
+	case jmt.RecordingStarted:
+		name := e.Participant.Name
+		if name == "" {
+			name = "mixed"
+		}
+		fmt.Fprintf(w, "record %s %s\n", name, e.Path)
 	}
 }
