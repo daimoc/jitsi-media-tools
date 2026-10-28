@@ -15,6 +15,7 @@ type Selection struct {
 	Height    int      // 180 (default), 360 or 720
 	Pins      []string // Display names always received
 	PinHeight int      // Height of pinned videos; default 720
+	Budget    int      // Received video in bits/s; 0 for none (FR-033)
 }
 
 const maxVideoLimit = 25
@@ -43,6 +44,9 @@ func (sel Selection) validate() error {
 	}
 	if !slices.Contains(allowedHeights, sel.PinHeight) {
 		return fmt.Errorf("pinned video height %d: want 180, 360 or 720", sel.PinHeight)
+	}
+	if sel.Budget != 0 && sel.Budget < minBudget {
+		return fmt.Errorf("video budget %d bit/s: want at least %d", sel.Budget, minBudget)
 	}
 	return nil
 }
@@ -87,13 +91,22 @@ func (s *Session) applySelection() {
 		s.sig.SetReceivePolicy(s.cfg.DisplayName, &signaling.ReceivePolicy{LastN: 0})
 		return
 	}
+	parts := s.reg.list()
 	s.mu.Lock()
 	sel := s.cfg.Selection
 	s.mu.Unlock()
-	p, dropped := sel.policy(s.reg.list(), s.reg.videoSource)
+	asked := sel
+	if sel.Budget > 0 {
+		room := roomCounts(sel, parts, s.reg.videoSource)
+		s.mu.Lock()
+		asked = s.budgetedLocked(sel, room)
+		s.mu.Unlock()
+	}
+	p, dropped := asked.policy(parts, s.reg.videoSource)
 	if len(dropped) > 0 {
 		s.warnOnce("pins", "More pinned participants than the video limit; not pinned: "+strings.Join(dropped, ", "))
 	}
+	p.AssumedBandwidth = sel.Budget
 	s.sig.SetReceivePolicy(s.cfg.DisplayName, p)
 }
 
@@ -113,6 +126,10 @@ func (s *Session) SetSelection(sel Selection) error {
 	}
 	s.mu.Lock()
 	s.cfg.Selection = sel
+	s.budget, s.budgetStarted = nil, false
+	if sel.Budget > 0 {
+		s.budget = newBudgetCtl(sel.Budget)
+	}
 	s.mu.Unlock()
 	s.emit(s.reg.setPins(sel.Pins)...)
 	s.applySelection()

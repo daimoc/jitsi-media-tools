@@ -151,6 +151,9 @@ type ReceivePolicy struct {
 	OnStage          []string // Source names shown large
 	DefaultMaxHeight int
 	MaxHeights       map[string]int // By source name
+	// AssumedBandwidth, in bits/s, is offered to the bridge in place of its
+	// bandwidth estimate; it uses it only where its operator allows (0: none).
+	AssumedBandwidth int
 }
 
 // EndpointStats are a participant's connection statistics, as Jitsi

@@ -18,7 +18,7 @@ func TestParseJoin_Maps(t *testing.T) {
 	f, err := parseJoin([]string{"--url", "https://localhost:8443/Room", "--name", "Bot", "--insecure",
 		"--publish", "file-loop:clip.mp4", "--publish-size", "640x360", "--display",
 		"--record", "/tmp/rec", "--record-mode", "mixed", "--obs-grid", "--obs-port", "9100",
-		"--pin", "Alice", "--pin", "Bob", "--video-limit", "4", "--jwt-app-id", "app"},
+		"--pin", "Alice", "--pin", "Bob", "--video-limit", "4", "--video-budget", "2.5M", "--jwt-app-id", "app"},
 		env(map[string]string{"JITSI_APP_SECRET": "s3cret"}), io.Discard)
 	if err != nil {
 		t.Fatal(err)
@@ -33,7 +33,7 @@ func TestParseJoin_Maps(t *testing.T) {
 	if o.OBS == nil || !o.OBS.Grid || o.OBS.BasePort != 9100 || o.OBS.MaxFeeds != 16 {
 		t.Errorf("obs %+v", o.OBS)
 	}
-	if strings.Join(o.Selection.Pins, ",") != "Alice,Bob" || o.Selection.Limit != 4 || o.Selection.Height != 180 {
+	if strings.Join(o.Selection.Pins, ",") != "Alice,Bob" || o.Selection.Limit != 4 || o.Selection.Height != 180 || o.Selection.Budget != 2_500_000 {
 		t.Errorf("selection %+v", o.Selection)
 	}
 	if o.AppID != "app" || o.AppSecret != "s3cret" {
@@ -54,6 +54,7 @@ func TestParseJoin_Errors(t *testing.T) {
 		{"--url", "u", "--publish", "foo"},   // Bad source
 		{"--url", "u", "--publish", "file:"}, // No path
 		{"--url", "u", "--publish", "device:,"},
+		{"--url", "u", "--video-budget", "fast"},
 		{"--url", "u", "--publish-size", "640"},
 		{"--url", "u", "--record", "d", "--record-mode", "x"},
 		{"--url", "u", "--jwt-app-id", "a"}, // No secret

@@ -48,6 +48,8 @@ import media packages and vice versa; `internal/session` is the only glue.
 
 ## Recent Changes
 
+- 001-jitsi-media-session: received-video budget (FR-033, R8): `internal/session/budget.go`,
+  `--video-budget`; `assumedBandwidthBps` offered to the bridge
 - 001-jitsi-media-session: camera and microphone (US7): `jmt.DeviceSource`, names resolved
   before joining; Linux captures Motion-JPEG when the camera offers it
 - 001-jitsi-media-session: recording (US6): one ffmpeg per file (not a tee on the feed's

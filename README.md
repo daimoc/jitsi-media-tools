@@ -279,7 +279,19 @@ fails.
 ```bash
 jitsi-media-tools join --url https://meet.example.org/MyRoom --name Viewer \
   --video-limit 9 --video-height 180 --pin "Alice" --pin "Bob" --pin-height 720
+
+# Keep received video under 3 Mbit/s
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Viewer --display \
+  --pin "Alice" --video-budget 3M
 ```
+
+`--video-budget` (bits/s, e.g. `3M`, `800k`) caps the video received. When the selection
+would need more, the tool gives up, in this order: the resolution of unpinned participants,
+then their number, then the pinned participants' resolution. A pinned participant is never
+dropped. It measures what arrives every 2 s, moves down after two windows over the budget,
+and back up once there is room again (10 s after moving down at the earliest). The budget is
+also offered to the bridge, which enforces it itself where its operator set
+`videobridge.cc.assumed-bandwidth-limit`.
 
 ### Servers
 

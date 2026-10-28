@@ -118,6 +118,11 @@ type Session struct {
 	state  State
 	err    error
 	warned map[string]bool // warnOnce keys
+	// budget keeps received video within Selection.Budget (nil without
+	// one); started once its first level is chosen.
+	budget        *budgetCtl
+	budgetStarted bool
+	meter         videoMeter // Received video bytes per participant
 
 	media *media // Publish and receive pipelines
 
@@ -147,6 +152,9 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 	s := &Session{cfg: cfg, logger: cfg.Logger, reg: newRegistry(), state: StateConnecting, done: make(chan struct{})}
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 	s.reg.setPins(cfg.Selection.Pins)
+	if b := cfg.Selection.Budget; b > 0 {
+		s.budget = newBudgetCtl(b)
+	}
 
 	// ffmpeg first: a missing part fails before contacting the server
 	// (FR-023).
@@ -211,6 +219,13 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 		return nil, err
 	}
 	s.applySelection()
+	if s.media.recv != nil && !cfg.SendOnly {
+		s.wg.Add(1)
+		go func() {
+			defer s.wg.Done()
+			s.runBudget()
+		}()
+	}
 	if err := s.media.joined(); err != nil {
 		if derr := sig.Disconnect(cfg.DisplayName); derr != nil {
 			s.logger.Debug("Disconnect", slog.String("error", derr.Error()))

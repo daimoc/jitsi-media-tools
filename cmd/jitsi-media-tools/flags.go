@@ -73,6 +73,10 @@ func parseJoin(args []string, getenv func(string) string, stderr io.Writer) (*jo
 	fs.IntVar(&o.Selection.Height, "video-height", 180, "received video height: 180, 360 or 720")
 	fs.Var(&pins, "pin", "always receive this participant's video (repeatable)")
 	fs.IntVar(&o.Selection.PinHeight, "pin-height", 720, "pinned video height: 180, 360 or 720")
+	fs.Func("video-budget", "cap on received video, bits/s: e.g. 3M, 800k (default none)", func(s string) (err error) {
+		o.Selection.Budget, err = parseBitrate(s)
+		return err
+	})
 	fs.StringVar(&o.FFmpeg, "ffmpeg", "", "ffmpeg executable (default from PATH)")
 	fs.StringVar(&o.FFplay, "ffplay", "", "ffplay executable (default from PATH)")
 	fs.StringVar(&f.logLevel, "log-level", "info", "debug, info or warn")
@@ -129,6 +133,22 @@ func parseSize(s string) (int, int, error) {
 		return 0, 0, fmt.Errorf("size %q: want WxH with even numbers, e.g. 1280x720", s)
 	}
 	return w, h, nil
+}
+
+// parseBitrate reads a bitrate in bits/s, with an optional k or M suffix.
+func parseBitrate(s string) (int, error) {
+	n, mult := strings.TrimSpace(s), 1.0
+	switch {
+	case strings.HasSuffix(n, "k"), strings.HasSuffix(n, "K"):
+		n, mult = n[:len(n)-1], 1e3
+	case strings.HasSuffix(n, "M"), strings.HasSuffix(n, "m"):
+		n, mult = n[:len(n)-1], 1e6
+	}
+	v, err := strconv.ParseFloat(n, 64)
+	if err != nil || v <= 0 {
+		return 0, fmt.Errorf("bitrate %q: want bits/s, e.g. 3M or 800k", s)
+	}
+	return int(v * mult), nil
 }
 
 // parsePublish maps --publish to a source.

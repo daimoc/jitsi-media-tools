@@ -216,6 +216,9 @@ func (r *receiver) track(t *peer.RemoteTrack) {
 			return
 		}
 		p.push(pkt)
+		if t.Kind == peer.KindVideo && p.owner != "" {
+			r.m.s.meter.add(p.owner, pkt.MarshalSize())
+		}
 	}
 }
 

@@ -128,3 +128,22 @@ Found and fixed during the check:
   (docs/latency.md, "camera and microphone").
 - ffmpeg 8 lists V4L2 as `video4linux2,v4l2`; the capability probe read the first alias
   only, so a device need of `v4l2` looked missing. Both aliases now count.
+
+## Scenario 8 (partial): received-video budget (US8, T084)
+
+Date: 2026-10-29. Local Jitsi, room `jmt-budget`: four tool publishers looping a 1280x720
+test pattern (single-layer VP8, no simulcast), one viewer recording per participant.
+
+```bash
+jitsi-media-tools join --url https://localhost:8443/jmt-budget --insecure --name Viewer \
+  --record /tmp/brec --video-budget 600k --log-level debug
+```
+
+- [x] With 3M the four videos (about 1 Mbps in all) stay as they are.
+- [x] With 600k the first estimate asks for 3 videos (`lastN` 3); about 700 kbps measured two
+  windows in a row moves it to 2 videos; then 450–540 kbps, steady for 20 s, no move back up
+  (3 videos estimated over 85% of the budget).
+- [x] `assumedBandwidthBps` is in every `ReceiverVideoConstraints`; the local bridge does not
+  enforce it (`assumed-bandwidth-limit` unset).
+- [ ] Resolution steps (unpinned 360 → 180, pinned 720 → 360 → 180): need simulcast senders
+  (browsers), with T065.

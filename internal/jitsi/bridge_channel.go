@@ -261,8 +261,9 @@ func policyConstraintsMessage(p *signaling.ReceivePolicy) string {
 		OnStage     []string                    `json:"onStageSources,omitempty"`
 		Default     videoConstraints            `json:"defaultConstraints"`
 		Constraints map[string]videoConstraints `json:"constraints,omitempty"`
+		Assumed     int                         `json:"assumedBandwidthBps,omitempty"`
 	}{Class: "ReceiverVideoConstraints", LastN: p.LastN, Selected: p.Selected, OnStage: p.OnStage,
-		Default: videoConstraints{MaxHeight: p.DefaultMaxHeight}}
+		Default: videoConstraints{MaxHeight: p.DefaultMaxHeight}, Assumed: p.AssumedBandwidth}
 	if len(p.MaxHeights) > 0 {
 		m.Constraints = map[string]videoConstraints{}
 		for name, h := range p.MaxHeights {

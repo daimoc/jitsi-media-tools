@@ -63,6 +63,12 @@ func TestPolicyConstraintsMessage(t *testing.T) {
 	if got != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
+	// A budget is offered to the bridge in place of its estimate (FR-033).
+	got = policyConstraintsMessage(&signaling.ReceivePolicy{LastN: 4, DefaultMaxHeight: 180, AssumedBandwidth: 3000000})
+	want = `{"colibriClass":"ReceiverVideoConstraints","lastN":4,"defaultConstraints":{"maxHeight":180},"assumedBandwidthBps":3000000}`
+	if got != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
 }
 
 type sentTexts struct {

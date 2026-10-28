@@ -47,6 +47,12 @@ type Selection struct {
 	Height    int      // 180 (default), 360 or 720
 	Pins      []string // Display names (case-insensitive)
 	PinHeight int      // Default 720
+	// Budget caps the received video, in bits/s (0: none; else at least
+	// 100000). Unpinned participants' resolution goes first, then their
+	// number, then pinned participants' resolution; a pinned participant
+	// is never dropped. Bridges that let receivers set their bandwidth
+	// also enforce it.
+	Budget int
 }
 
 // DisplayOptions shows the room in a tile-grid window (needs ffplay).
