@@ -97,8 +97,12 @@ func join(f *joinFlags, stdout, stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	f.opts.OnWaitingForHost = func() { printEvent(stdout, jmt.Event{Kind: jmt.WaitingForHost}) }
 	s, err := jmt.Join(ctx, f.opts)
 	if err != nil {
+		if ctx.Err() != nil {
+			return 0 // Ctrl+C before joining
+		}
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}

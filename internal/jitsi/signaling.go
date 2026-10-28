@@ -92,9 +92,14 @@ type SignalingClient struct {
 	joinOnce sync.Once
 	joinDone chan struct{} // Closed when the join succeeds or fails
 	joinErr  error         // Written before joinDone is closed
+	// noHost gets a join refused until a host is in the room; WaitJoined
+	// then joins again.
+	noHost      chan struct{}
+	displayName string // Of the last JoinMUC, guarded by lifeMu
 
 	lostOnce sync.Once
 	hostOnce sync.Once   // OnWaitingForHost called
+	waiting  atomic.Bool // A guest waiting for a host
 	onLost   func(error) // Called (in its own goroutine) when the connection is lost after joining
 
 	mu       sync.RWMutex
@@ -114,6 +119,7 @@ func NewSignalingClient(logger *slog.Logger, config JingleConfig) *SignalingClie
 		logger:      logger,
 		config:      config,
 		joinDone:    make(chan struct{}),
+		noHost:      make(chan struct{}, 1),
 		sessions:    make(map[string]*JingleSession),
 		closedCtx:   closedCtx,
 		closeCancel: closeCancel,
@@ -217,7 +223,7 @@ func (s *SignalingClient) Connect(ctx context.Context) error {
 			}
 			c.Features = []xmpp.StreamFeature{
 				xmpp.SASL("", "", sasl.Anonymous),
-				xmpp.BindResource(),
+				bindResource(),
 			}
 			if s.config.Debug {
 				var lastDirection int32 = 0                                                           // 0=init, 1=in, 2=out
@@ -385,7 +391,11 @@ func (s *SignalingClient) requestConference(ctx context.Context, session *xmpp.S
 			return fmt.Errorf("%w: %v", ErrFocusUnavailable, err)
 		}
 		if resp.Ready == "true" {
-			s.logger.Info("Conference allocated by focus", slog.String("focus", resp.FocusJID))
+			level := slog.LevelInfo
+			if s.waiting.Load() {
+				level = slog.LevelDebug // Asked again every hostRetry
+			}
+			s.logger.Log(ctx, level, "Conference allocated by focus", slog.String("focus", resp.FocusJID))
 			return nil
 		}
 		s.logger.Debug("Focus reported conference not ready, retrying", slog.String("room", s.roomJID()), slog.Duration("retry_in", delay))
@@ -395,6 +405,43 @@ func (s *SignalingClient) requestConference(ctx context.Context, session *xmpp.S
 		case <-time.After(delay):
 		}
 	}
+}
+
+// hostWaiter reports whether the handler can be told that the guest waits
+// for a host.
+func (s *SignalingClient) hostWaiter() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.handler.(signaling.HostWaiter)
+	return ok
+}
+
+// presenceError is a presence's <error>: a stanza error condition, and
+// Jitsi's own children (<waiting-for-host/>, <lobbyroom>).
+type presenceError struct {
+	Children []struct {
+		XMLName xml.Name
+	} `xml:",any"`
+}
+
+// condition returns the stanza error condition, or "unknown".
+func (e *presenceError) condition() string {
+	for _, c := range e.Children {
+		if c.XMLName.Space == stanza.NSError && c.XMLName.Local != "text" {
+			return c.XMLName.Local
+		}
+	}
+	return "unknown"
+}
+
+// has reports whether the error has a child named local.
+func (e *presenceError) has(local string) bool {
+	for _, c := range e.Children {
+		if c.XMLName.Local == local {
+			return true
+		}
+	}
+	return false
 }
 
 // hostRetry is how often a guest asks again for a conference only a host
@@ -411,6 +458,7 @@ func (s *SignalingClient) waitForHost(ctx context.Context) bool {
 	if !ok {
 		return false // Nobody to tell: not a guest waiting for a host
 	}
+	s.waiting.Store(true)
 	s.hostOnce.Do(func() {
 		s.logger.Info("Waiting for a host to start the conference")
 		w.OnWaitingForHost()
@@ -515,6 +563,7 @@ func (s *SignalingClient) JoinMUC(ctx context.Context, displayName string) error
 	}
 	s.lifeMu.Lock()
 	s.nick = occupantNick(session.LocalAddr())
+	s.displayName = displayName
 	s.lifeMu.Unlock()
 
 	if err := s.requestConference(ctx, session); err != nil {
@@ -530,22 +579,35 @@ func (s *SignalingClient) JoinMUC(ctx context.Context, displayName string) error
 	return session.Send(ctx, mucJoinPresence(s.occupantJID(), displayName, sourcesPresence(s.nickname(), kinds)))
 }
 
-// WaitJoined waits for the MUC join to complete or fail.
+// WaitJoined waits for the MUC join to complete or fail. A guest refused
+// until a host is in the room (meet.jit.si) waits and joins again.
 func (s *SignalingClient) WaitJoined(ctx context.Context) error {
-	select {
-	case <-s.joinDone:
-		return s.joinErr
-	case <-ctx.Done():
-		return ctx.Err()
+	for {
+		select {
+		case <-s.joinDone:
+			return s.joinErr
+		case <-s.noHost:
+			if !s.waitForHost(ctx) {
+				return fmt.Errorf("%w: no host came to the room", ErrRoomUnavailable)
+			}
+			s.lifeMu.Lock()
+			name := s.displayName
+			s.lifeMu.Unlock()
+			if err := s.JoinMUC(ctx, name); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
 // mucPresence is a presence stanza with the MUC user extension (XEP-0045).
 type mucPresence struct {
-	From  string        `xml:"from,attr"`
-	Type  string        `xml:"type,attr"`
-	X     *mucUserX     `xml:"http://jabber.org/protocol/muc#user x"`
-	Error *stanza.Error `xml:"error"`
+	From  string         `xml:"from,attr"`
+	Type  string         `xml:"type,attr"`
+	X     *mucUserX      `xml:"http://jabber.org/protocol/muc#user x"`
+	Error *presenceError `xml:"error"`
 
 	// Jitsi participant state (lib-jitsi-meet presence extensions).
 	Nick       string `xml:"http://jabber.org/protocol/nick nick"`
@@ -644,9 +706,20 @@ func (s *SignalingClient) handlePresence(t xmlstream.TokenReadEncoder, start *xm
 	case p.Type == string(stanza.ErrorPresence):
 		condition := "unknown"
 		if p.Error != nil {
-			condition = string(p.Error.Condition)
+			condition = p.Error.condition()
+		}
+		if condition == string(stanza.RegistrationRequired) && p.Error.has("waiting-for-host") && s.hostWaiter() {
+			s.logger.Debug("Room refused the join until a host comes", slog.String("room", s.roomJID()))
+			select {
+			case s.noHost <- struct{}{}:
+			default:
+			}
+			return nil
 		}
 		err := fmt.Errorf("%w: %s", ErrRoomUnavailable, condition)
+		if condition == string(stanza.RegistrationRequired) {
+			err = fmt.Errorf("%w: the room has a lobby, where a moderator admits each participant; joining through it is not supported", ErrRoomUnavailable)
+		}
 		if !s.finishJoin(err) {
 			s.logger.Error("Presence error from room", slog.String("error", err.Error()))
 		}

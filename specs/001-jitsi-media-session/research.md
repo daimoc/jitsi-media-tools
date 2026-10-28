@@ -211,6 +211,14 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
 - **Guest waiting for host**: Jicofo answers the conference request with `ready='false'`
   or a not-authorized error while no authenticated host is in the room; the session
   retries every 5 s and reports "waiting for host" until `--wait-host` (default 5 min).
+  meet.jit.si (checked 2026-10-28, release 7156) allocates the conference (`ready='true'`)
+  and refuses the MUC join instead: presence error `registration-required` with
+  `<waiting-for-host xmlns='http://jitsi.org/jitmeet'/>` and a `<lobbyroom>`; the session
+  waits the same way and joins again. The same error without `<waiting-for-host/>` is a
+  lobby a moderator controls: refused with a message (joining through the lobby is not
+  implemented). meet.jit.si also sends a disco#info `<message>` between the bind request
+  and its result, which mellium's `BindResource` rejects (`bad-format`); the tool binds
+  with its own feature that skips stanzas until the result.
 - **TLS**: `--insecure` skips certificate verification for HTTPS and WebSocket; otherwise
   normal verification (FR-005).
 - **Rationale**: FR-002/003/005; one URL is how users share meetings.

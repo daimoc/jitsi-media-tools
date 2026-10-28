@@ -200,8 +200,12 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 	joinCtx, cancel := context.WithTimeout(ctx, cfg.ConnectTimeout+cfg.WaitHost)
 	defer cancel()
 	if err := sig.Connect(joinCtx, cfg.DisplayName, &handler{Peer: p, s: s}); err != nil {
+		waited := s.State() == StateWaitingHost
 		s.abort()
-		if s.State() == StateWaitingHost {
+		switch {
+		case ctx.Err() != nil:
+			return nil, ctx.Err()
+		case waited:
 			return nil, fmt.Errorf("timed out waiting for a host after %s: %w", cfg.WaitHost, err)
 		}
 		return nil, err

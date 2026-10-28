@@ -25,6 +25,9 @@ type fakeXMPPServer struct {
 	domain string
 	srv    *httptest.Server
 	conns  chan *fakeConn
+	// beforeBind is sent between the bind request and its result, as
+	// meet.jit.si sends its disco#info message.
+	beforeBind string
 }
 
 const testDomain = "meet.example.org"
@@ -162,6 +165,9 @@ func (s *fakeXMPPServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			case "iq":
 				if strings.Contains(e.Inner, "urn:ietf:params:xml:ns:xmpp-bind") {
+					if s.beforeBind != "" {
+						c.write(ctx, s.beforeBind)
+					}
 					c.write(ctx, `<iq xmlns="jabber:client" type="result" id="`+e.attr("id")+`"><bind xmlns="urn:ietf:params:xml:ns:xmpp-bind"><jid>`+c.jid+`</jid></bind></iq>`)
 					if !announced {
 						announced = true

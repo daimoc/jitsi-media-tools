@@ -51,3 +51,13 @@ func TestAdapter_AnswersDiscoInfo(t *testing.T) {
 		t.Errorf("unknown node must be an error, got %s", reply)
 	}
 }
+
+// meet.jit.si sends a message (its components, as disco#info) before the
+// result of the bind request: the connection must still be set up.
+func TestAdapter_StanzaBeforeBindResult(t *testing.T) {
+	srv := newFakeXMPPServer(t)
+	srv.beforeBind = `<message xmlns="jabber:client" from="` + testDomain + `"><query xmlns="http://jabber.org/protocol/disco#info"><identity category="component" name="visitors.` + testDomain + `" type="visitors"/></query></message>`
+	a := newTestAdapter(t, srv, nil)
+	connectPeer(t, srv, a, "peer1", newPionHandler(t))
+	a.Disconnect("peer1")
+}

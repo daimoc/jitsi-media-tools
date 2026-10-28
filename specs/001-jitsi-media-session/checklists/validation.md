@@ -55,3 +55,31 @@ Found and fixed during the check (aff984b):
 - Pion dropped a track for good when its first packets used an unregistered codec (AV1 before
   the switch). AV1 is now registered, and each receive pipe restarts its decoder when the
   track's codec changes. The browsers switched from AV1 to VP9 within 0.3 s.
+
+## Scenario 5: Join a real deployment as a guest (US5, T056)
+
+Date: 2026-10-28. Server: meet.jit.si (shard eu-frankfurt-1, release 7156),
+room `https://meet.jit.si/HorribleArrowsRememberEach`, no token.
+
+```bash
+jitsi-media-tools join --url https://meet.jit.si/HorribleArrowsRememberEach --name "jmt test" \
+  --publish file-loop:clip.webm --publish-size 640x360
+```
+
+- [x] config.js read: guest domain `guest.meet.jit.si`, MUC `conference.meet.jit.si`,
+  WebSocket `wss://meet.jit.si/xmpp-websocket`.
+- [x] Guest login (SASL ANONYMOUS) and the conference request succeed.
+- [x] With no host in the room, the tool prints `waiting for host…` and joins again every
+  5 s; Ctrl+C while waiting exits with no error and no ffmpeg left.
+- [ ] Joined once a host is in the room; seen and heard by the host's browser.
+
+Found and fixed during the check:
+
+- Login failed with `xmpp authentication failed: bad-format`: meet.jit.si sends a message
+  before the result of the bind request, which mellium rejected. Custom bind feature.
+- Joining failed with `room unavailable: registration-required`: meet.jit.si refuses
+  guests' joins (not the conference request) until a host is in the room. Now waits.
+- `waiting for host…` was never printed: the CLI reads events only after Join returns.
+  `jmt.Options.OnWaitingForHost` is called during Join.
+- Ctrl+C while waiting reported "timed out waiting for a host after 2m0s" and exit 1; it
+  now exits 0 quietly.

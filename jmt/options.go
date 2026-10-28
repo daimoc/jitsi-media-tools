@@ -24,6 +24,10 @@ type Options struct {
 	Moderator bool
 
 	WaitHost time.Duration // Guest wait for a host; default 5m
+	// OnWaitingForHost, when set, is called during Join once the guest
+	// starts waiting for a host (Events only delivers WaitingForHost after
+	// Join returns).
+	OnWaitingForHost func()
 
 	FFmpeg, FFplay string // Executables; default from PATH
 

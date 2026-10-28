@@ -27,7 +27,12 @@ func Join(ctx context.Context, o Options) (*Session, error) {
 	}
 	q := newEventQueue[Event]()
 	cfg.OnEvent = func(e session.Event) { q.push(eventFrom(e)) }
-	cfg.OnWaitingHost = func() { q.push(Event{Kind: WaitingForHost}) }
+	cfg.OnWaitingHost = func() {
+		q.push(Event{Kind: WaitingForHost})
+		if o.OnWaitingForHost != nil {
+			o.OnWaitingForHost()
+		}
+	}
 	s, err := session.Start(ctx, cfg)
 	if err != nil {
 		q.close()
