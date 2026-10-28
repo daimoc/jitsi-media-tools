@@ -143,7 +143,10 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   ratio of the measured received video bitrate to the estimate for what arrives, every 2 s.
   The session moves down to the most generous level that fits after two windows over budget,
   and up only to a level estimated within 85% of the budget, 10 s after the last move down.
-  Decoders keep their output size: the bridge's layer changes need no restart.
+  After a move, windows are ignored for 5 s: the bridge takes a moment to switch, and a
+  window still measuring the old videos made the level climb twice in 2 s and overshoot
+  (seen with 20 simulcast bots). Decoders keep their output size: the bridge's layer
+  changes need no restart.
   Alternatives: the bridge alone (not available on most deployments); a fixed table without
   measurement (codecs and motion vary the rates several-fold).
 

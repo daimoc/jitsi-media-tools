@@ -16,6 +16,9 @@ const (
 	upMargin     = 0.85             // Move up only to a level estimated within this share of the budget
 	upAfter      = 10 * time.Second // Move up only this long after moving down
 	overWindows  = 2                // Windows over budget before moving down
+	// settleTime is how long after a move windows are ignored: the bridge
+	// takes a moment to switch, so they still measure the old videos.
+	settleTime = 2*budgetWindow + time.Second
 )
 
 // layerRate is the typical bitrate of a simulcast layer, by height.
@@ -78,6 +81,7 @@ type budgetCtl struct {
 	scale    float64 // Measured over estimated bitrate
 	over     int     // Consecutive windows over budget
 	lastDown time.Time
+	settle   time.Time // Windows before this are ignored
 }
 
 func newBudgetCtl(budget int) *budgetCtl { return &budgetCtl{budget: float64(budget), scale: 1} }
@@ -87,7 +91,7 @@ func newBudgetCtl(budget int) *budgetCtl { return &budgetCtl{budget: float64(bud
 func (c *budgetCtl) fit(now time.Time, lad []level, room counts) {
 	c.level = min(c.level, len(lad)-1)
 	if i := c.fitting(lad, room, c.level, c.budget); i > c.level {
-		c.level, c.lastDown = i, now
+		c.level, c.lastDown, c.settle = i, now, now.Add(settleTime)
 	}
 }
 
@@ -106,6 +110,9 @@ func (c *budgetCtl) fitting(lad []level, room counts, first int, limit float64) 
 // reports whether the level changed.
 func (c *budgetCtl) step(now time.Time, lad []level, room, arriving counts, measured float64) bool {
 	c.level = min(c.level, len(lad)-1) // The ladder shrinks with the pins
+	if now.Before(c.settle) {
+		return false
+	}
 	if est := lad[c.level].cost(arriving); est > 0 && measured > 0 {
 		c.scale = measured / est
 	}
@@ -117,11 +124,11 @@ func (c *budgetCtl) step(now time.Time, lad []level, room, arriving counts, meas
 	switch {
 	case c.over >= overWindows && c.level < len(lad)-1:
 		c.level = c.fitting(lad, room, c.level+1, c.budget)
-		c.over, c.lastDown = 0, now
+		c.over, c.lastDown, c.settle = 0, now, now.Add(settleTime)
 		return true
 	case c.over == 0 && c.level > 0 && now.Sub(c.lastDown) >= upAfter:
 		if i := c.fitting(lad, room, 0, upMargin*c.budget); i < c.level {
-			c.level = i
+			c.level, c.settle = i, now.Add(settleTime)
 			return true
 		}
 	}

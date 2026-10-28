@@ -95,3 +95,23 @@ func TestBudget_PolicySent(t *testing.T) {
 		t.Error("a 50 kbps budget was accepted")
 	}
 }
+
+// After a move the bridge takes a moment to switch: the windows that follow
+// still measure the old videos, and must not move the level again.
+func TestBudget_SettlesAfterMoving(t *testing.T) {
+	sel := Selection{Limit: 9, Height: 180, PinHeight: 720, Budget: 2_400_000}
+	lad := ladder(sel, 1)
+	room := counts{pins: 1, others: 8}
+	c := newBudgetCtl(sel.Budget)
+	at := time.Unix(1000, 0)
+	c.fit(at, lad, room) // The pin alone at 360 (2.5 Mbps estimated at 720)
+	at = at.Add(upAfter)
+	if !c.step(at, lad, room, counts{pins: 1}, 500_000) {
+		t.Fatal("did not move up with room")
+	}
+	moved := c.level
+	// The next window still measures the pin alone at 360: no second move.
+	if c.step(at.Add(budgetWindow), lad, room, counts{pins: 1}, 500_000) || c.level != moved {
+		t.Fatalf("moved again to %v before the bridge switched", lad[c.level])
+	}
+}
