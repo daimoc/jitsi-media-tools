@@ -108,15 +108,21 @@ func TestVideoDecoder_FixedSize(t *testing.T) {
 func TestAudioDecoder_PCM(t *testing.T) {
 	bin := ffmpegtest.Require(t)
 	ogg := encodeTo(t, bin, "a.ogg", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=1",
-		"-c:a", "libopus", "-f", "ogg")
+		"-c:a", "libopus", "-page_duration", "20000", "-f", "ogg") // One packet per page, as the receiver writes
 
 	d, err := ffmpeg.StartAudioDecoder(context.Background(), ffmpeg.DecoderConfig{Bin: bin, Format: "ogg", Logger: testLogger})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer d.Stop()
-	go func() {
-		d.Write(ogg)
+	go func() { // Paced like a live stream: fed at once, the burst of
+		// decoded chunks overflows the decoder's queue whenever this reader
+		// lags (under -race), and the oldest are dropped by design.
+		const pieces = 50
+		for i := 0; i < pieces; i++ {
+			d.Write(ogg[len(ogg)*i/pieces : len(ogg)*(i+1)/pieces])
+			time.Sleep(20 * time.Millisecond)
+		}
 		d.CloseInput()
 	}()
 	// 20 ms chunks of 48 kHz stereo s16le: 960 * 2 * 2 bytes.
