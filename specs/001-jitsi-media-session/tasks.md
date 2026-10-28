@@ -170,7 +170,7 @@ H.264 and Opus forwarded unchanged (research R14).
 - [X] T053 [P] [US5] Test JWT paths in `internal/jitsi/jwt_test.go` (copied tests + new): ready token from `--jwt`, from URL `?jwt=`, signed from AppID/AppSecret with audience/subject/TTL/moderator; rejected auth → error containing "authentication failed"
 - [X] T054 [US5] Implement guest login and wait-for-host retry in `internal/jitsi/signaling.go` / `internal/jitsi/guest.go`; `WaitingForHost` event and session state `waiting_host`; CLI `--wait-host`
 - [X] T055 [US5] Map auth errors to "authentication failed" in `internal/jitsi`; CLI `--jwt` / `$JITSI_JWT`, `--jwt-app-id` + `$JITSI_APP_SECRET`, `--jwt-audience`, `--jwt-subject`, `--jwt-ttl`, `--jwt-moderator`; server override flags `--domain --muc --anonymous-domain --ws --focus`
-- [ ] T056 [US5] Hand check: join a real deployment as guest with only its URL; if the server refuses a guest for lack of SSRC rewriting or visitor support, record it in `checklists/validation.md` and open a follow-up feature (do not implement here, R12); commit
+- [X] T056 [US5] Hand check: join a real deployment as guest with only its URL; if the server refuses a guest for lack of SSRC rewriting or visitor support, record it in `checklists/validation.md` and open a follow-up feature (do not implement here, R12); commit
 
 ---
 

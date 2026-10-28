@@ -81,21 +81,22 @@ func signJWT(c JingleConfig, peerID string, now time.Time) (string, error) {
 	return jwt.Sign(claims, []byte(c.JWTAppSecret))
 }
 
-// websocketURL adds the room and the token to the WebSocket URL, as
-// lib-jitsi-meet does (Prosody reads the token from the URL; the client
-// still authenticates with SASL ANONYMOUS). Without a token the URL is
-// returned unchanged.
+// websocketURL adds the room and the token, if any, to the WebSocket URL,
+// as lib-jitsi-meet does. Deployments with several shards (meet.jit.si)
+// route the connection to the room's shard by the room; without it, a
+// guest lands on any shard and waits there for a host who is on another.
+// Prosody reads the token from the URL; the client still authenticates
+// with SASL ANONYMOUS.
 func websocketURL(base, room, token string) (string, error) {
-	if token == "" {
-		return base, nil
-	}
 	u, err := url.Parse(base)
 	if err != nil {
 		return "", fmt.Errorf("invalid websocket_url: %w", err)
 	}
 	q := u.Query()
 	q.Set("room", strings.ToLower(room))
-	q.Set("token", token)
+	if token != "" {
+		q.Set("token", token)
+	}
 	u.RawQuery = q.Encode()
 	return u.String(), nil
 }

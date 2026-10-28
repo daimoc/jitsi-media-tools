@@ -107,7 +107,8 @@ func TestTokenFor(t *testing.T) {
 
 func TestWebsocketURL(t *testing.T) {
 	for _, tc := range []struct{ base, room, token, want string }{
-		{"wss://x/xmpp-websocket", "Room", "", "wss://x/xmpp-websocket"},
+		// The room routes the connection to the room's shard (meet.jit.si).
+		{"wss://x/xmpp-websocket", "Room", "", "wss://x/xmpp-websocket?room=room"},
 		{"wss://x/xmpp-websocket", "Room", "t.o.k", "wss://x/xmpp-websocket?room=room&token=t.o.k"},
 		{"wss://x/xmpp-websocket?a=1", "r", "tok", "wss://x/xmpp-websocket?a=1&room=r&token=tok"},
 	} {
@@ -152,8 +153,8 @@ func TestAdapter_NoTokenWithoutJWTConfig(t *testing.T) {
 	srv := newFakeXMPPServer(t)
 	a := newTestAdapter(t, srv, nil)
 	c := connectPeer(t, srv, a, "peer1", newPionHandler(t))
-	if len(c.query) != 0 {
-		t.Errorf("expected no query parameters, got %v", c.query)
+	if c.query.Has("token") || c.query.Get("room") != "room" {
+		t.Errorf("expected the room and no token, got %v", c.query)
 	}
 	a.Disconnect("peer1")
 }

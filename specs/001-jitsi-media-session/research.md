@@ -218,7 +218,8 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   lobby a moderator controls: refused with a message (joining through the lobby is not
   implemented). meet.jit.si also sends a disco#info `<message>` between the bind request
   and its result, which mellium's `BindResource` rejects (`bad-format`); the tool binds
-  with its own feature that skips stanzas until the result.
+  with its own feature that skips stanzas until the result. The WebSocket URL always carries
+  `?room=<room>`, token or not: meet.jit.si routes connections to the room's shard by it.
 - **TLS**: `--insecure` skips certificate verification for HTTPS and WebSocket; otherwise
   normal verification (FR-005).
 - **Rationale**: FR-002/003/005; one URL is how users share meetings.

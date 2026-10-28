@@ -71,7 +71,10 @@ jitsi-media-tools join --url https://meet.jit.si/HorribleArrowsRememberEach --na
 - [x] Guest login (SASL ANONYMOUS) and the conference request succeed.
 - [x] With no host in the room, the tool prints `waiting for host…` and joins again every
   5 s; Ctrl+C while waiting exits with no error and no ffmpeg left.
-- [ ] Joined once a host is in the room; seen and heard by the host's browser.
+- [x] Joined once a host was in the room (`+ dsds`); the host saw the test pattern and heard
+  its tone ("ok good").
+- [x] Received the host's Opus audio and VP9 video (320x180) in 0.3 s; with `--record`, a
+  59 s file of their video and audio (H.264 640x360, AAC); no warnings, no ffmpeg left.
 
 Found and fixed during the check:
 
@@ -83,3 +86,11 @@ Found and fixed during the check:
   `jmt.Options.OnWaitingForHost` is called during Join.
 - Ctrl+C while waiting reported "timed out waiting for a host after 2m0s" and exit 1; it
   now exits 0 quietly.
+- With the host in the room, the tool still waited: without a token, the WebSocket URL had
+  no `?room=`, which meet.jit.si uses to route the connection to the room's shard, so the
+  tool reached a shard where the room had no host. The room is now always in the URL, as
+  lib-jitsi-meet does.
+
+Not checked: a deployment that refuses a guest for lack of SSRC rewriting or visitor
+support (R12); meet.jit.si offers visitors (`visitors-supported`) but did not use them for
+a room this small.
