@@ -115,7 +115,8 @@ jitsi-media-tools join --url https://localhost:8443/jmt-cam --insecure --name Ca
 - [x] The encoder captures in Motion-JPEG at 30 fps (`-input_format mjpeg`); no warnings,
   no ffmpeg left after Ctrl+C.
 - [x] An unknown name fails before joining, listing the devices there are (unit test).
-- [ ] Watched in a browser (to do by hand).
+- [x] Watched in a browser: camera and microphone OK; about 1 s of delay before the
+  latency fix below, then judged good by the user.
 
 Found and fixed during the check:
 
