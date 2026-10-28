@@ -54,7 +54,7 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | Join a room: local server, guest, JWT | Done |
 | Publish a media file (`file:`, `file-loop:`) | Done |
 | List capture devices (`devices`) | Done |
-| Publish a camera and microphone (`device:`) | Not yet |
+| Publish a camera and microphone (`device:`) | Done |
 | Stream OBS into meetings: WHIP gateway (`serve`) | Done |
 | Tile-grid window (`--display`) | Done |
 | Recording (`--record`) | Done |
@@ -111,6 +111,26 @@ fit `--publish-size` (1280x720 by default) and padded, at 30 fps, and Opus audio
 file has no video or no audio, only the kind it has is published. If the source has a gap,
 or ffmpeg restarts, the room sees a black picture and hears silence; the participant does
 not drop out.
+
+### Publish a camera and microphone
+
+```bash
+jitsi-media-tools devices
+# video  "Integrated_Webcam_FHD: Integrat"  (/dev/video0)
+# audio  "default"  (the default microphone)
+# audio  "alsa_input.pci-0000_00_1f.3.analog-stereo"
+
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Cam \
+  --publish "device:Integrated_Webcam_FHD: Integrat,default"
+```
+
+`device:VIDEO,AUDIO` takes the names `devices` prints (case does not matter; on Linux the
+`/dev/videoN` path works too). Leave one out to publish only the other: `device:,default`
+for the microphone alone, `device:/dev/video0` for the camera alone. An unknown name stops
+the tool before it joins, listing the devices there are. The camera is captured at
+`--publish-size` and 30 fps; on Linux the tool asks for Motion-JPEG when the camera offers
+it, since most webcams send raw 720p at 10 fps or less. Devices come from V4L2 and
+PulseAudio/PipeWire on Linux, AVFoundation on macOS and DirectShow on Windows.
 
 ### Watch and listen to the room
 

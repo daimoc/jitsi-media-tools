@@ -141,6 +141,13 @@ func parsePublish(s string, w, h int) (jmt.Source, error) {
 			return nil, fmt.Errorf("--publish %s: needs a path", kind)
 		}
 		src = jmt.FileSource(arg, kind == "file-loop")
+	case "device":
+		// Names hold no commas; either may be empty.
+		video, audio, _ := strings.Cut(arg, ",")
+		if video == "" && audio == "" {
+			return nil, fmt.Errorf("--publish device: needs a camera, a microphone or both: device:VIDEO,AUDIO")
+		}
+		src = jmt.DeviceSource(strings.TrimSpace(video), strings.TrimSpace(audio))
 	default:
 		if strings.HasPrefix(kind, "obs") {
 			return nil, fmt.Errorf("--publish %q: OBS streams in through the WHIP gateway, jitsi-media-tools serve", s)

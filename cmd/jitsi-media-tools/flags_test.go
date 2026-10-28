@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -52,6 +53,7 @@ func TestParseJoin_Errors(t *testing.T) {
 		{},                                   // No --url
 		{"--url", "u", "--publish", "foo"},   // Bad source
 		{"--url", "u", "--publish", "file:"}, // No path
+		{"--url", "u", "--publish", "device:,"},
 		{"--url", "u", "--publish-size", "640"},
 		{"--url", "u", "--record", "d", "--record-mode", "x"},
 		{"--url", "u", "--jwt-app-id", "a"}, // No secret
@@ -136,6 +138,19 @@ func TestWHIPAddress(t *testing.T) {
 	} {
 		if got := whipAddress(c.addr, c.public, c.scheme); got != c.want {
 			t.Errorf("whipAddress(%q, %q) = %q, want %q", c.addr, c.public, got, c.want)
+		}
+	}
+}
+
+func TestParsePublish_Devices(t *testing.T) {
+	for arg, want := range map[string]jmt.Source{
+		"device:Integrated Camera,default": jmt.DeviceSource("Integrated Camera", "default"),
+		"device:Cam":                       jmt.DeviceSource("Cam", ""),
+		"device:,Mic":                      jmt.DeviceSource("", "Mic"),
+	} {
+		got, err := parsePublish(arg, 640, 360)
+		if err != nil || !reflect.DeepEqual(got, jmt.WithSize(want, 640, 360)) {
+			t.Errorf("%s: %#v %v", arg, got, err)
 		}
 	}
 }

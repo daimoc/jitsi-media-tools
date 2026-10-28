@@ -1,0 +1,2 @@
+[in#0 @ 0x5d31eab47f40] Compressed:       mjpeg :          Motion-JPEG : 1920x1080 1280x960 1280x720 640x480 640x360
+Error opening input file /dev/video0.

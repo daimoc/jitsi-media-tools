@@ -38,6 +38,7 @@ go run ./cmd/jitsi-media-tools join --url https://localhost:8443/IntriguingClima
 go run ./tests/displaycheck --url https://localhost:8443/jmt-display --insecure   # latency to the screen, by screenshot
 WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure   # WHIP gateway; OBS server http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Rec --record /tmp/rec   # --record-mode mixed
+go run ./cmd/jitsi-media-tools devices && go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Cam --publish device:/dev/video0,default
 ```
 
 ## Code Style
@@ -47,6 +48,8 @@ import media packages and vice versa; `internal/session` is the only glue.
 
 ## Recent Changes
 
+- 001-jitsi-media-session: camera and microphone (US7): `jmt.DeviceSource`, names resolved
+  before joining; Linux captures Motion-JPEG when the camera offers it
 - 001-jitsi-media-session: recording (US6): one ffmpeg per file (not a tee on the feed's
   ffmpeg, R11 revised); `internal/session/outputs.go` drives feeds and recordings
 - 001-jitsi-media-session: WHIP gateway for OBS (US9, research R14): `serve`, `jmt.Gateway`,

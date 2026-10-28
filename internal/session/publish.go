@@ -47,6 +47,11 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 			p.Width, p.Height = f.W, f.H
 		}
 	}
+	if p.Input.Kind == "devices" {
+		if err := m.openDevices(ctx, p); err != nil {
+			return err
+		}
+	}
 	if p.Input.Kind == "file" {
 		st, err := ffmpeg.FileStreams(ctx, m.tools.ffmpeg, p.Input.Path)
 		if err != nil {
@@ -73,6 +78,40 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 		pb.audio = make(chan rtpmedia.Frame)
 	}
 	m.pub = pb
+	return nil
+}
+
+// listDevices lists the capture devices; tests replace it.
+var listDevices = ffmpeg.ListDevices
+
+// openDevices looks up the named devices and builds the input capturing
+// them: an unknown name fails before joining, listing the devices there
+// are (FR-008).
+func (m *media) openDevices(ctx context.Context, p *Publish) error {
+	devs, err := listDevices(ctx, m.tools.ffmpeg)
+	if err != nil {
+		return fmt.Errorf("listing devices: %w", err)
+	}
+	var video, audio *ffmpeg.Device
+	for _, want := range []struct {
+		kind, name string
+		dev        **ffmpeg.Device
+	}{{"video", p.Input.Video, &video}, {"audio", p.Input.Audio, &audio}} {
+		if want.name == "" {
+			continue
+		}
+		d, err := ffmpeg.FindDevice(devs, want.kind, want.name)
+		if err != nil {
+			return err
+		}
+		*want.dev = &d
+	}
+	args, _, _ := ffmpeg.DeviceInput(ctx, m.tools.ffmpeg, video, audio, p.Width, p.Height)
+	if err := m.tools.caps.Missing(ffmpeg.InputFormats(args)...); err != nil {
+		return err
+	}
+	p.Input.Args = args
+	p.Audio, p.Video = audio != nil, video != nil
 	return nil
 }
 

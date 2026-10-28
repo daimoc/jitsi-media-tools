@@ -12,6 +12,7 @@ type Device struct {
 	Name        string // What the user gives
 	Description string
 	Input       string // What ffmpeg's input takes (a path on Linux, the name elsewhere)
+	Format      string // Linux cameras: the input format to ask for ("" for the default)
 }
 
 // parsePactlSources reads "pactl list short sources", leaving out the
@@ -27,6 +28,17 @@ func parsePactlSources(s string) []Device {
 		out = append(out, Device{Kind: "audio", Name: f[1], Input: f[1]})
 	}
 	return out
+}
+
+var v4l2Compressed = regexp.MustCompile(`Compressed:\s+mjpeg\s`)
+
+// parseV4L2Formats reads "ffmpeg -f v4l2 -list_formats compressed -i
+// /dev/videoN" and returns the format to capture in: "mjpeg" when offered.
+func parseV4L2Formats(s string) string {
+	if v4l2Compressed.MatchString(s) {
+		return "mjpeg"
+	}
+	return ""
 }
 
 var (

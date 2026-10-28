@@ -194,7 +194,7 @@ H.264 and Opus forwarded unchanged (research R14).
 
 - [X] T060 [P] [US7] Tests `internal/ffmpeg/devices_test.go` on recorded listings in `internal/ffmpeg/testdata/devices/{linux-v4l2.txt,linux-pactl.txt,darwin-avfoundation.txt,windows-dshow.txt}` (parsers are OS-independent, so all run on every OS)
 - [X] T061 [US7] Implement listing parsers `internal/ffmpeg/devices_parse.go` and per-OS dispatch `devices_linux.go` (`/sys/class/video4linux/*/name` + `pactl list short sources`, ALSA fallback; input `-f v4l2 -i /dev/videoN`, `-f pulse -i <source>`), `devices_darwin.go` (`-f avfoundation -list_devices true -i ""`; input `-f avfoundation -i "<video>:<audio>"`), `devices_windows.go` (`-f dshow -list_devices true -i dummy`; input `-f dshow -i video="<v>":audio="<a>"`)
-- [ ] T062 [US7] `jmt.ListDevices`, `jmt.DeviceSource`; unknown device → error listing available ones before joining; CLI `devices` subcommand and `--publish device:VIDEO,AUDIO`; hand check on Linux (scenario 7); commit
+- [X] T062 [US7] `jmt.ListDevices`, `jmt.DeviceSource`; unknown device → error listing available ones before joining; CLI `devices` subcommand and `--publish device:VIDEO,AUDIO`; hand check on Linux (scenario 7); commit
 
 ---
 

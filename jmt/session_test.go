@@ -295,3 +295,10 @@ func TestJoin_Record(t *testing.T) {
 		t.Errorf("decoding %s: %v\n%s", path, err, out)
 	}
 }
+
+func TestDeviceSource(t *testing.T) {
+	p := WithSize(DeviceSource("Cam", ""), 640, 360).publish()
+	if in := p.Input; in.Kind != "devices" || in.Video != "Cam" || in.Audio != "" || p.Width != 640 {
+		t.Errorf("publish %+v", p)
+	}
+}

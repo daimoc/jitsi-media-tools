@@ -13,6 +13,8 @@ func listDevices(ctx context.Context, bin string) ([]Device, error) {
 	return parseDShow(string(b)), nil
 }
 
+func cameraFormat(context.Context, string, string) string { return "" }
+
 func deviceInput(video, audio *Device, _, _ int) (args []string, videoMap, audioMap string) {
 	spec := ""
 	if video != nil {

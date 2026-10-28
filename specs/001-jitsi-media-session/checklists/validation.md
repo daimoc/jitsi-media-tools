@@ -94,3 +94,32 @@ Found and fixed during the check:
 Not checked: a deployment that refuses a guest for lack of SSRC rewriting or visitor
 support (R12); meet.jit.si offers visitors (`visitors-supported`) but did not use them for
 a room this small.
+
+## Scenario 7: Publish a camera and microphone (US7, T062)
+
+Date: 2026-10-28. Linux (PipeWire), Dell integrated webcam, local Jitsi
+(`https://localhost:8443/jmt-cam`). The meeting was watched by a second tool session
+recording per participant, not by a browser.
+
+```bash
+jitsi-media-tools devices
+jitsi-media-tools join --url https://localhost:8443/jmt-cam --insecure --name Cam \
+  --publish "device:Integrated_Webcam_FHD: Integrat,default"
+```
+
+- [x] `devices` lists the camera (`/dev/video0`, not its metadata node `/dev/video1`), a
+  `default` microphone and the PipeWire sources, without the outputs' monitors.
+- [x] Joined and published: the recorder's file of "Cam" shows the room seen by the camera,
+  and holds the microphone's sound (mean -50 dB, peak -26 dB in a quiet room; silence would
+  be about -91 dB).
+- [x] The encoder captures in Motion-JPEG at 30 fps (`-input_format mjpeg`); no warnings,
+  no ffmpeg left after Ctrl+C.
+- [x] An unknown name fails before joining, listing the devices there are (unit test).
+- [ ] Watched in a browser (to do by hand).
+
+Found and fixed during the check:
+
+- The camera gave 10 fps: in raw YUYV at 1280x720 it fills USB 2. The tool now asks ffmpeg
+  for the camera's compressed formats and captures Motion-JPEG when offered.
+- ffmpeg 8 lists V4L2 as `video4linux2,v4l2`; the capability probe read the first alias
+  only, so a device need of `v4l2` looked missing. Both aliases now count.

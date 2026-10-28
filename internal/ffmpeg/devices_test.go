@@ -45,3 +45,19 @@ func TestFindDevice(t *testing.T) {
 		t.Errorf("unknown device error %v", err)
 	}
 }
+
+func TestInputFormats(t *testing.T) {
+	got := InputFormats([]string{"-f", "v4l2", "-framerate", "30", "-i", "/dev/video0", "-f", "pulse", "-i", "default"})
+	if want := []string{"device:v4l2", "device:pulse"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("InputFormats = %v, want %v", got, want)
+	}
+}
+
+func TestParseV4L2Formats(t *testing.T) {
+	if f := parseV4L2Formats(readTestdata(t, "devices/linux-v4l2-formats.txt")); f != "mjpeg" {
+		t.Errorf("format %q, want mjpeg", f)
+	}
+	if f := parseV4L2Formats("Error opening input file /dev/video0.\n"); f != "" {
+		t.Errorf("format %q for a camera without compressed formats", f)
+	}
+}

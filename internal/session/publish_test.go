@@ -4,12 +4,14 @@ import (
 	"context"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/pion/webrtc/v3"
 
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
 )
 
@@ -165,5 +167,39 @@ func TestPublish_MissingFileFailsBeforeJoining(t *testing.T) {
 	}
 	if f.Handler() != nil {
 		t.Error("joined despite the missing file")
+	}
+}
+
+// fakeDevices makes the device list devs for the test.
+func fakeDevices(t *testing.T, devs ...ffmpeg.Device) {
+	t.Helper()
+	old := listDevices
+	listDevices = func(context.Context, string) ([]ffmpeg.Device, error) { return devs, nil }
+	t.Cleanup(func() { listDevices = old })
+}
+
+// An unknown device name fails before joining, listing the devices there
+// are (US7 scenario 3).
+func TestPublish_UnknownDeviceFailsBeforeJoining(t *testing.T) {
+	ffmpegtest.Require(t)
+	fakeDevices(t, ffmpeg.Device{Kind: "video", Name: "Cam", Input: "/dev/video0"}, ffmpeg.Device{Kind: "audio", Name: "Mic", Input: "mic"})
+	for _, c := range []struct{ video, audio, want string }{
+		{"Nope", "Mic", `no video device "Nope"; available: "Cam"`},
+		{"Cam", "Nope", `no audio device "Nope"; available: "Mic"`},
+		{"", "", "names no camera or microphone"},
+	} {
+		f := &fakeSignal{}
+		useFake(t, f)
+		var col collected
+		_, err := Start(context.Background(), col.config(Config{
+			MeetingURL: "https://meet.test/Room", DisplayName: "Cam",
+			Publish: &Publish{Input: DeviceInput(c.video, c.audio)},
+		}))
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("devices %q, %q: error %v, want %q", c.video, c.audio, err, c.want)
+		}
+		if f.Handler() != nil {
+			t.Errorf("devices %q, %q: joined", c.video, c.audio)
+		}
 	}
 }

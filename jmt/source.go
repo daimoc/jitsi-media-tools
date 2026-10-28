@@ -21,6 +21,17 @@ func (f fileSource) publish() *session.Publish {
 	return &session.Publish{Input: session.FileInput(f.path, f.loop), Audio: true, Video: true}
 }
 
+type deviceSource struct{ video, audio string }
+
+// DeviceSource publishes a camera and a microphone, named as ListDevices
+// names them (case does not matter); "" omits one. An unknown name fails
+// Join before joining, listing the devices there are.
+func DeviceSource(video, audio string) Source { return deviceSource{video, audio} }
+
+func (d deviceSource) publish() *session.Publish {
+	return &session.Publish{Input: session.DeviceInput(d.video, d.audio)}
+}
+
 type sizedSource struct {
 	Source
 	w, h int

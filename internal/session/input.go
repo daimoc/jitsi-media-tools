@@ -12,6 +12,9 @@ type Input struct {
 	Args []string // ffmpeg input arguments (with -i)
 	Path string   // File inputs: checked before joining
 	Loop bool     // File inputs: play again at the end
+	// Video and Audio name the capture devices (devices inputs; "" omits
+	// one). They are looked up and Args built before joining.
+	Video, Audio string
 	// Frames is what a program writes (frames inputs); the encoder's raw
 	// inputs are opened per run.
 	Frames *Frames
@@ -29,6 +32,12 @@ func FileInput(path string, loop bool) Input {
 	return Input{Kind: "file", Path: path, Loop: loop, Args: append(args, "-i", path)}
 }
 
+// DeviceInput captures a camera and a microphone, by their names in the
+// device list; "" omits one.
+func DeviceInput(video, audio string) Input {
+	return Input{Kind: "devices", Video: video, Audio: audio}
+}
+
 // check fails before joining when the input cannot work.
 func (in Input) check() error {
 	if in.Kind == "forward" && in.Forwarded == nil {
@@ -42,6 +51,9 @@ func (in Input) check() error {
 		if f.Video && (f.W <= 0 || f.H <= 0) {
 			return fmt.Errorf("frame source size %dx%d", f.W, f.H)
 		}
+	}
+	if in.Kind == "devices" && in.Video == "" && in.Audio == "" {
+		return fmt.Errorf("device source names no camera or microphone")
 	}
 	if in.Kind == "file" {
 		info, err := os.Stat(in.Path)

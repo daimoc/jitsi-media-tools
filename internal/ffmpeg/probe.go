@@ -192,7 +192,9 @@ func parseDevices(s string) map[string]bool {
 			continue
 		}
 		if f := strings.Fields(line[3:]); len(f) > 0 {
-			set[f[0]] = true
+			for _, name := range strings.Split(f[0], ",") { // "video4linux2,v4l2"
+				set[name] = true
+			}
 		}
 	}
 	return set
