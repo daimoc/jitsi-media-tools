@@ -254,6 +254,23 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
     "auto" with x264) the first keyframe came 7.4 s later, with 60 frames 1.4 s. The gateway
     repeats the PLI every 500 ms until a keyframe comes, logs the wait, and warns past 2 s
     that the publisher's keyframe interval should be 1 s.
+  - **Statistics in the meeting (FR-032, added 2026-10-28)**: Jitsi web shows, for a remote
+    participant, the statistics that participant sends itself: lib-jitsi-meet
+    `ConnectionQuality._broadcastLocalStats` sends every 10 s (`pcStatsInterval`) on the
+    bridge channel `{"colibriClass":"EndpointStats","bitrate":{"upload","download","audio":
+    {…},"video":{…}},"packetLoss":{"upload","download","total"},"connectionQuality",
+    "jvbRTT","maxEnabledResolution","serverRegion"}` (kbps, percent, 0–100, ms; captured
+    from a browser and read in the server's `lib-jitsi-meet.min.js`); the bridge adds `from`
+    and relays it, and receivers store it as that participant's remote stats
+    (`_updateRemoteStats`). Resolution, frame rate and codec are not sent: receivers read
+    them from their own inbound streams. The gateway sends it per stream: upload bitrate =
+    what it forwards (audio, video); upload loss = loss from the publisher to the gateway
+    (RTP sequence gaps per interval) combined with the loss the bridge reports in its RTCP
+    receiver reports, `1 − (1 − a)(1 − b)`; download 0 (it receives no video);
+    connectionQuality from the upload loss with lib-jitsi-meet's thresholds for a stream
+    judged by loss (≤ 2 % → 100, ≤ 4 → 70, ≤ 6 → 50, ≤ 8 → 30, ≤ 12 → 10, else 0); jvbRTT
+    from the selected ICE pair. The format is lib-jitsi-meet's, not a published API: a
+    version that changes it shows nothing, and nothing else breaks.
   - **One layer**: OBS sends one H.264 layer and no simulcast, so the bridge cannot lower its
     resolution for a receiver with little bandwidth; the streamer sets a bitrate the room can
     take.

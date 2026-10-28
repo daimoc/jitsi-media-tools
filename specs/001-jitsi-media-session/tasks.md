@@ -153,6 +153,11 @@ H.264 and Opus forwarded unchanged (research R14).
 - [X] T077 [US9] `jmt.Gateway` per `contracts/library-api.md` (`NewGateway`, `Serve`, `Streams`, `Events`, `Close`), Go doc and a runnable example; CLI `serve` per `contracts/cli.md` (flags, `$WHIP_API_SECRET`, `--secret-file`, printed lines, exit codes); remove `obs-srt:`/`obs-rtmp:` from `--publish` and `OBSSource` from the `jmt` docs
 - [ ] T078 [US9] Live test `tests/live/whip_test.go` (skips without ffmpeg ≥ 8 `whip` muxer): gateway on loopback, `ffmpeg -re -f lavfi testsrc2 + sine -c:v libx264 -tune zerolatency -c:a libopus -f whip -authorization S http://…/whip/localhost:8443/<room>?name=OBS`, a viewer session in the room sees "OBS" and decodes its video and audio; killing ffmpeg → "OBS" leaves within 10 s; a wrong token → nobody joins; README (OBS setup for WHIP), CLAUDE.md commands; hand check quickstart scenario 9 with OBS and a browser; commit
 
+- [ ] T079 [P] [US9] Test `internal/jitsi`: `SignalingClient.SendEndpointStats` writes `{"colibriClass":"EndpointStats",…}` (R14 format, numbers rounded) on the open bridge channel of the active session, nothing before it opens; test `internal/peer`: `Ingest.Stats()` counts packets, bytes and lost packets (sequence gaps, wrap-around) per kind; `Peer.UploadLoss()` follows the fraction lost of the bridge's receiver reports per kind
+- [ ] T080 [US9] Implement T079: `signaling.EndpointStats`, `SignalClient.SendEndpointStats`, `bridgeChannel.sendStats`; `Ingest.Stats`, `Peer.UploadLoss`, `Peer.RTT` (selected ICE pair)
+- [ ] T081 [US9] Test then implement in `internal/session/gateway.go`: every 10 s per stream, interval bitrate and loss, combined loss, connection quality (thresholds tested), sent with SendEndpointStats once media is connected; `whip.Stream.Stats` → `whip.Info.Stats` → `jmt.GatewayStream.Stats` (`VideoKbps`, `AudioKbps`, `PublisherLoss`, `MeetingLoss`, `RTT`); a debug log line per interval
+- [ ] T082 [US9] Hand check: headless Chrome in the room reads OBS's remote stats (`connectionQuality._remoteStats`) with the expected bitrate; with `tc netem` loss on loopback (or an ffmpeg publisher dropping packets) the loss shows; docs/obs-whip.md and README mention the connection details; commit
+
 ---
 
 ## Phase 7: User Story 5 — Join real deployments as a guest or with a token (P2)

@@ -233,6 +233,10 @@ streaming and "OBS" leaves.
    shows its own stream, and stopping one does not affect the other.
 6. **Given** OBS streams video in a codec other than H.264 (AV1, HEVC), **Then** the gateway
    refuses the request with a message that names H.264, and joins nothing.
+7. **Given** OBS is streaming through the gateway, **When** a browser participant opens the
+   connection details of the OBS tile, **Then** it shows the stream's bitrate, its packet
+   loss from OBS to the meeting, and a connection quality, updated every 10 seconds
+   (added 2026-10-28).
 
 ---
 
@@ -337,6 +341,11 @@ streaming and "OBS" leaves.
   and key) or from a reverse proxy in front.
 - **FR-031**: The gateway MUST log each stream's start, end and failure with the meeting and
   name, and MUST NOT log the secret or tokens.
+- **FR-032**: For each stream, the gateway MUST report to the meeting, as Jitsi clients report
+  their own, the bitrate it forwards, the packet loss from the publisher to the meeting, a
+  connection quality and its round-trip time to the bridge, so that the meeting's connection
+  details for that participant show them; the same figures MUST be available through the
+  library (added 2026-10-28).
 
 **Library**
 

@@ -171,6 +171,15 @@ type GatewayStream struct {
     MeetingURL  string // without the token
     DisplayName string
     Started     time.Time
+    Stats       StreamStats // over the last 10 s; zero until media flows
+}
+
+type StreamStats struct {
+    VideoKbps, AudioKbps int     // forwarded to the meeting
+    PublisherLoss        float64 // percent of packets lost from the publisher to the gateway
+    MeetingLoss          float64 // percent lost from the publisher to the bridge (both legs)
+    Quality              int     // 0–100, as the meeting shows it
+    RTT                  time.Duration // gateway to bridge
 }
 
 type GatewayEvent struct {
