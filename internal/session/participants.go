@@ -34,7 +34,8 @@ const (
 	EventJoined EventKind = iota
 	EventLeft
 	EventChanged
-	EventFeedReady // An OBS feed address: FeedURL, for Participant.Name ("" for the grid)
+	EventFeedReady        // An OBS feed address: FeedURL, for Participant.Name ("" for the grid)
+	EventRecordingStarted // A recording's file: Path, for Participant.Name ("" for the mixed one)
 )
 
 // Event is a change in the room.
@@ -42,6 +43,7 @@ type Event struct {
 	Kind        EventKind
 	Participant Participant
 	FeedURL     string // EventFeedReady only
+	Path        string // EventRecordingStarted only
 }
 
 // defaultName is the name of a participant without a display name.

@@ -37,7 +37,7 @@ type DisplayOptions struct{ Title string }
 // receives reports whether the session can decode what it receives. Even
 // then, a kind is decoded only while something consumes it.
 func (c *Config) receives() bool {
-	return c.Receive || c.Display != nil || c.OnGrid != nil || c.OnMix != nil || c.OBS != nil
+	return c.Receive || c.Display != nil || c.OnGrid != nil || c.OnMix != nil || c.OBS != nil || c.Record != nil
 }
 
 // receiver decodes the received tracks into the room and drives the
@@ -46,7 +46,7 @@ type receiver struct {
 	m       *media
 	room    *compose.Room
 	display *output.Display
-	feeds   *feeds // Nil without OBS feeds
+	out     *outputs // Nil without OBS feeds or recording
 	sinks   sinks
 
 	mu    sync.Mutex
@@ -58,8 +58,8 @@ func screenTile(id string) string { return id + "#screen" }
 
 func newReceiver(m *media) *receiver {
 	r := &receiver{m: m, room: compose.NewRoom(gridWidth, gridHeight, m.s.cfg.Selection.Limit), known: map[string]bool{}}
-	if o := m.s.cfg.OBS; o != nil {
-		r.feeds = newFeeds(r, *o)
+	if c := m.s.cfg; c.OBS != nil || c.Record != nil {
+		r.out = newOutputs(r, c.OBS, c.Record)
 	}
 	r.sinks.ctx = m.s.ctx
 	if f := m.s.cfg.OnGrid; f != nil {
@@ -73,7 +73,7 @@ func newReceiver(m *media) *receiver {
 
 // wants reports whether something consumes received media of a kind.
 func (r *receiver) wants(kind string) bool {
-	if r.m.s.cfg.Display != nil || r.feeds != nil { // Set before any track; the outputs come later
+	if r.m.s.cfg.Display != nil || r.out != nil { // Set before any track; the outputs come later
 		return true
 	}
 	if kind == peer.KindVideo {
@@ -111,8 +111,8 @@ func (r *receiver) start() error {
 			go s.Close()
 		}()
 	}
-	if r.feeds != nil {
-		r.feeds.start()
+	if r.out != nil {
+		r.out.start()
 	}
 	r.sync()
 	s.wg.Add(2)
@@ -129,15 +129,15 @@ func (r *receiver) start() error {
 }
 
 func (r *receiver) videoTick(now time.Time) {
-	if r.feeds != nil {
-		r.feeds.videoTick(now)
+	if r.out != nil {
+		r.out.videoTick(now)
 	}
-	if r.display == nil && r.sinks.grid.Load() == nil && !r.feeds.wantsGrid() {
+	if r.display == nil && r.sinks.grid.Load() == nil && !r.out.wantsGrid() {
 		return // Nobody looks at the grid: do not draw it
 	}
 	g := r.room.VideoTick(now)
-	if r.feeds.wantsGrid() {
-		r.feeds.grid.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))))
+	if r.out.wantsGrid() {
+		r.out.gridVideo(g)
 	}
 	if r.display != nil {
 		r.display.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))))
@@ -147,15 +147,15 @@ func (r *receiver) videoTick(now time.Time) {
 
 func (r *receiver) audioTick(mix []int16, now time.Time) {
 	var each func(string, []int16)
-	if r.sinks.audio.Load() != nil || r.feeds != nil {
+	if r.sinks.audio.Load() != nil || r.out != nil {
 		each = func(id string, chunk []int16) {
 			deliverAudio(&r.sinks.audio, id, chunk, now)
-			r.feeds.audio(id, chunk)
+			r.out.audio(id, chunk)
 		}
 	}
 	r.room.AudioTick(mix, each)
-	if r.feeds != nil {
-		r.feeds.audioTick(mix)
+	if r.out != nil {
+		r.out.audioTick(mix)
 	}
 	if r.display != nil {
 		r.display.WriteAudio(pcmBytes(mix))
@@ -185,8 +185,8 @@ func (r *receiver) sync() {
 		}
 	}
 	r.known = now
-	if r.feeds != nil {
-		r.feeds.sync(parts)
+	if r.out != nil {
+		r.out.sync(parts)
 	}
 }
 
@@ -194,8 +194,8 @@ func (r *receiver) setLimit(n int) { r.room.SetLimit(n) }
 
 func (r *receiver) stop() {
 	r.sinks.stop()
-	if r.feeds != nil {
-		r.feeds.stop()
+	if r.out != nil {
+		r.out.stop()
 	}
 	if r.display != nil {
 		r.display.Stop()
@@ -366,8 +366,8 @@ func (p *pipe) consume(dec *ffmpeg.Decoder) {
 func (p *pipe) selected(on bool) {
 	if e, ok := p.r.m.s.reg.setSelected(p.owner, on); ok {
 		p.r.m.s.emit(e)
-		if on && p.r.feeds != nil {
-			p.r.feeds.sync(p.r.m.s.reg.list())
+		if on && p.r.out != nil {
+			p.r.out.sync(p.r.m.s.reg.list())
 		}
 	}
 }

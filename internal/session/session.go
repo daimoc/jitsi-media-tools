@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"log/slog"
+	"os"
 	"slices"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/daimoc/jitsi-media-tools/internal/compose"
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 	"github.com/daimoc/jitsi-media-tools/internal/jitsi"
+	"github.com/daimoc/jitsi-media-tools/internal/output"
 	"github.com/daimoc/jitsi-media-tools/internal/peer"
 	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
@@ -54,6 +56,7 @@ type Config struct {
 	Selection Selection       // Which video to receive
 	Display   *DisplayOptions // Nil: no window
 	OBS       *OBSOptions     // Nil: no SRT feeds
+	Record    *RecordOptions  // Nil: no recording
 
 	// OnGrid gets the composed grid at 30 fps and OnMix the room's mix
 	// every 20 ms (ChunkSamples); buffers are valid during the call only,
@@ -152,6 +155,12 @@ func Start(ctx context.Context, cfg Config) (*Session, error) {
 		s.cancel()
 		return nil, err
 	}
+	if r := cfg.Record; r != nil {
+		if err := os.MkdirAll(r.Dir, 0o755); err != nil {
+			s.cancel()
+			return nil, fmt.Errorf("record directory: %w", err)
+		}
+	}
 	m, err := s.resolve(ctx)
 	if err != nil {
 		s.cancel()
@@ -237,6 +246,9 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	}
 	if s.cfg.OBS != nil {
 		needs = append(slices.Clone(needs), feedNeeds...)
+	}
+	if s.cfg.Record != nil {
+		needs = append(slices.Clone(needs), output.RecordNeeds...)
 	}
 	if err := caps.Missing(needs...); err != nil {
 		return t, err
