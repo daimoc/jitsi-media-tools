@@ -53,6 +53,7 @@ type Config struct {
 	Publish   *Publish        // Nil: publish nothing
 	Selection Selection       // Which video to receive
 	Display   *DisplayOptions // Nil: no window
+	OBS       *OBSOptions     // Nil: no SRT feeds
 
 	// OnGrid gets the composed grid at 30 fps and OnMix the room's mix
 	// every 20 ms (ChunkSamples); buffers are valid during the call only,
@@ -233,6 +234,9 @@ func (s *Session) checkTools(ctx context.Context) (tools, error) {
 	}
 	if s.cfg.receives() {
 		needs = append(slices.Clone(needs), receiveNeeds...)
+	}
+	if s.cfg.OBS != nil {
+		needs = append(slices.Clone(needs), feedNeeds...)
 	}
 	if err := caps.Missing(needs...); err != nil {
 		return t, err

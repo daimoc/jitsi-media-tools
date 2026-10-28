@@ -34,12 +34,14 @@ const (
 	EventJoined EventKind = iota
 	EventLeft
 	EventChanged
+	EventFeedReady // An OBS feed address: FeedURL, for Participant.Name ("" for the grid)
 )
 
 // Event is a change in the room.
 type Event struct {
 	Kind        EventKind
 	Participant Participant
+	FeedURL     string // EventFeedReady only
 }
 
 // defaultName is the name of a participant without a display name.
@@ -105,7 +107,7 @@ func (r *registry) occupant(o signaling.Occupant) []Event {
 				delete(r.srcs, ssrc)
 			}
 		}
-		return []Event{{EventLeft, *p}}
+		return []Event{{Kind: EventLeft, Participant: *p}}
 	}
 	if o.SourceMuted == nil {
 		delete(r.muted, o.ID)
@@ -122,7 +124,7 @@ func (r *registry) occupant(o signaling.Occupant) []Event {
 		p.Name = r.uniqueName(display, o.ID)
 		p.Pinned = r.pinnedLocked(p)
 		r.byID[o.ID] = p
-		return []Event{{EventJoined, *p}}
+		return []Event{{Kind: EventJoined, Participant: *p}}
 	}
 	before := *p
 	if display != p.display {
@@ -134,7 +136,7 @@ func (r *registry) occupant(o signaling.Occupant) []Event {
 	if *p == before {
 		return nil
 	}
-	return []Event{{EventChanged, *p}}
+	return []Event{{Kind: EventChanged, Participant: *p}}
 }
 
 // setPins sets the pinned display names and returns the participants whose
@@ -150,7 +152,7 @@ func (r *registry) setPins(names []string) []Event {
 	for _, p := range r.sortedLocked() {
 		if pinned := r.pinnedLocked(p); pinned != p.Pinned {
 			p.Pinned = pinned
-			evs = append(evs, Event{EventChanged, *p})
+			evs = append(evs, Event{Kind: EventChanged, Participant: *p})
 		}
 	}
 	return evs
@@ -251,7 +253,7 @@ func (r *registry) setSelected(id string, selected bool) (Event, bool) {
 		return Event{}, false
 	}
 	p.Selected = selected
-	return Event{EventChanged, *p}, true
+	return Event{Kind: EventChanged, Participant: *p}, true
 }
 
 // list returns copies of the participants in join order.

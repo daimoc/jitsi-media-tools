@@ -111,3 +111,35 @@ func TestClock_TicksAndCatchesUp(t *testing.T) {
 		t.Errorf("%d ticks in 210 ms of 20 ms, want about 10", got)
 	}
 }
+
+// A participant's tile stream: their latest frame scaled to fill the
+// frame, or their name card without fresh video, or when they are gone.
+func TestRoom_DrawTile(t *testing.T) {
+	r := NewRoom(64, 36, 9)
+	now := time.Now()
+	r.SetParticipant("a", "Alice", false, now)
+	dst := NewFrame(320, 180)
+	center := func() byte { return dst.Y[90*320+160] }
+	corner := func() byte { return dst.Y[2*320+2] } // Away from the name label
+
+	if r.DrawTile(dst, "a", "Alice", now) {
+		t.Error("video reported before any frame")
+	}
+	if corner() != 40 {
+		t.Errorf("no card: corner %d, want the card's 40", corner())
+	}
+	r.PushVideo("a", video(200), now)
+	if !r.DrawTile(dst, "a", "Alice", now) || center() != 200 {
+		t.Errorf("video tile: centre %d, want 200", center())
+	}
+	if r.DrawTile(dst, "a", "Alice", now.Add(videoStale+time.Second)) {
+		t.Error("stale video reported as video")
+	}
+	r.Remove("a")
+	if r.DrawTile(dst, "a", "Alice", now) {
+		t.Error("a participant who left has video")
+	}
+	if corner() != 40 {
+		t.Errorf("a participant who left: corner %d, want the card's 40", corner())
+	}
+}

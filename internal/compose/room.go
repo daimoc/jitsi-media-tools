@@ -126,6 +126,23 @@ func (r *Room) VideoTick(now time.Time) *Frame {
 	return r.grid
 }
 
+// DrawTile draws one participant's tile stream on dst at now: their
+// latest frame scaled to fit, or their name card when they have no fresh
+// video or have left (name is the one to show then). It reports whether
+// it drew video.
+func (r *Room) DrawTile(dst *Frame, id, name string, now time.Time) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	whole := Rect{0, 0, dst.W, dst.H}
+	if m := r.parts[id]; m != nil && m.frame != nil && now.Sub(m.at) <= videoStale {
+		dst.Fill(16, 128, 128)
+		ScaleInto(dst, whole, m.frame)
+		return true
+	}
+	DrawCard(dst, whole, name)
+	return false
+}
+
 // AudioTick takes the next 20 ms of every participant into mix
 // (ChunkSamples); each, when set, gets each participant's chunk.
 func (r *Room) AudioTick(mix []int16, each func(id string, chunk []int16)) {
