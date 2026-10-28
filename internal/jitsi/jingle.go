@@ -303,6 +303,22 @@ func (s *SignalingClient) SetReceivePolicy(p *signaling.ReceivePolicy) {
 	}
 }
 
+// SendEndpointStats sends the participant's connection statistics on the
+// bridge channels of its sessions.
+func (s *SignalingClient) SendEndpointStats(st signaling.EndpointStats) {
+	s.mu.Lock()
+	var bridges []*bridgeChannel
+	for _, session := range s.sessions {
+		if session.bridge != nil {
+			bridges = append(bridges, session.bridge)
+		}
+	}
+	s.mu.Unlock()
+	for _, b := range bridges {
+		b.sendStats(st)
+	}
+}
+
 // updateBridge sends the session's current receive preferences on its
 // bridge channel. Callers hold session.renegMu, so that updates follow the
 // order of the applied offers.

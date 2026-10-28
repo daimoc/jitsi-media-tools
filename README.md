@@ -175,6 +175,8 @@ gateway serves several streams at once, into any Jitsi meetings.
   or the best picture.
 - The meeting starts receiving media once a second participant is in it.
 - A stream that sends nothing for 10 s leaves the meeting.
+- The OBS tile's connection details in the meeting (its signal bars) show the stream's
+  bitrate, its packet loss from OBS to the meeting, and a connection quality.
 
 | Option | Default |
 |---|---|

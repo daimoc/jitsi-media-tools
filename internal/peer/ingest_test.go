@@ -374,3 +374,47 @@ func TestIngest_RepeatsKeyframeRequestsUntilOne(t *testing.T) {
 		t.Errorf("%d keyframe requests after the keyframe, want none", more)
 	}
 }
+
+// The ingest counts what the publisher sends, and the packets lost on the
+// way (sequence numbers skipped), across the 16-bit wrap.
+func TestIngest_Stats(t *testing.T) {
+	pub, vt, _ := publisherPC(t, h264High, false)
+	ing, answer := newTestIngest(t, offerOf(t, pub))
+	if err := pub.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); pub.ConnectionState() != webrtc.PeerConnectionStateConnected; time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("publisher not connected")
+		}
+	}
+	payload := []byte{0x41, 1, 2, 3, 4, 5, 6, 7}
+	sent := 0
+	for i := 0; i < 40; i++ {
+		seq := uint16(65520 + i) // Wraps after 16 packets
+		if i >= 25 && i < 30 {
+			continue // Lost
+		}
+		vt.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: seq}, Payload: payload})
+		sent++
+		time.Sleep(10 * time.Millisecond)
+	}
+	var st IngestStats
+	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if st = ing.Stats(); st.Video.Packets >= uint64(sent) {
+			break
+		}
+	}
+	if st.Video.Packets != uint64(sent) {
+		t.Fatalf("%d video packets counted, sent %d", st.Video.Packets, sent)
+	}
+	if st.Video.Lost != 5 {
+		t.Errorf("%d lost, want 5", st.Video.Lost)
+	}
+	if st.Video.Bytes != st.Video.Packets*uint64(12+len(payload)) {
+		t.Errorf("%d bytes for %d packets of %d", st.Video.Bytes, st.Video.Packets, 12+len(payload))
+	}
+	if st.Audio.Packets != 0 {
+		t.Errorf("%d audio packets, want 0", st.Audio.Packets)
+	}
+}

@@ -1,6 +1,9 @@
 package signaling
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // TrickleFunc delivers a local ICE candidate ("candidate:..." SDP attribute
 // value, without the "a=" prefix) for the media section identified by mid to
@@ -148,6 +151,17 @@ type ReceivePolicy struct {
 	OnStage          []string // Source names shown large
 	DefaultMaxHeight int
 	MaxHeights       map[string]int // By source name
+}
+
+// EndpointStats are a participant's connection statistics, as Jitsi
+// clients report their own to the meeting (research R14).
+type EndpointStats struct {
+	UploadKbps, DownloadKbps         int
+	AudioUploadKbps, VideoUploadKbps int
+	UploadLoss, DownloadLoss         float64 // Percent of packets
+	TotalLoss                        float64 // Percent, both directions
+	Quality                          int     // Connection quality, 0 to 100
+	RTT                              time.Duration
 }
 
 // HostWaiter may be implemented by a SignalingHandler to know when a guest

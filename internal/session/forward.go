@@ -52,6 +52,13 @@ func (f *Forwarded) wire() {
 	f.src.RequestKeyframe()
 }
 
+// connected reports whether packets flow to the meeting.
+func (f *Forwarded) connected() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.src != nil && f.tracks != nil
+}
+
 func (f *Forwarded) requestKeyframe() {
 	f.mu.Lock()
 	src := f.src

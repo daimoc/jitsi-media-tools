@@ -264,9 +264,12 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
     and relays it, and receivers store it as that participant's remote stats
     (`_updateRemoteStats`). Resolution, frame rate and codec are not sent: receivers read
     them from their own inbound streams. The gateway sends it per stream: upload bitrate =
-    what it forwards (audio, video); upload loss = loss from the publisher to the gateway
-    (RTP sequence gaps per interval) combined with the loss the bridge reports in its RTCP
-    receiver reports, `1 − (1 − a)(1 − b)`; download 0 (it receives no video);
+    what it forwards (audio, video); upload loss = the larger of the loss from the publisher
+    to the gateway (RTP sequence gaps per interval) and the loss the bridge reports in its
+    RTCP receiver reports. The forwarded packets keep the publisher's sequence numbers, so
+    the bridge's figure already includes the publisher's gaps (combining them as independent
+    losses showed 10 % for 5 % dropped, measured); the publisher's counts until the bridge
+    reports. Download 0 (it receives no video); jvbRTT rounded to whole ms, at least 1;
     connectionQuality from the upload loss with lib-jitsi-meet's thresholds for a stream
     judged by loss (≤ 2 % → 100, ≤ 4 → 70, ≤ 6 → 50, ≤ 8 → 30, ≤ 12 → 10, else 0); jvbRTT
     from the selected ICE pair. The format is lib-jitsi-meet's, not a published API: a

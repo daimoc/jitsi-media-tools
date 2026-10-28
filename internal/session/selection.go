@@ -97,6 +97,14 @@ func (s *Session) applySelection() {
 	s.sig.SetReceivePolicy(s.cfg.DisplayName, p)
 }
 
+// sendEndpointStats reports the participant's connection statistics to
+// the meeting.
+func (s *Session) sendEndpointStats(st signaling.EndpointStats) {
+	if s.sig != nil {
+		s.sig.SendEndpointStats(s.cfg.DisplayName, st)
+	}
+}
+
 // SetSelection changes the selection at any time.
 func (s *Session) SetSelection(sel Selection) error {
 	sel = sel.withDefaults()

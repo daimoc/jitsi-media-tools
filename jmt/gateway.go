@@ -58,6 +58,17 @@ type GatewayStream struct {
 	MeetingURL  string // Without the token
 	DisplayName string
 	Started     time.Time
+	Stats       StreamStats // Over the last 10 s; zero in events and until media flows
+}
+
+// StreamStats are a stream's statistics, the ones the gateway also reports
+// to the meeting as the participant's connection details.
+type StreamStats struct {
+	VideoKbps, AudioKbps int           // Forwarded to the meeting
+	PublisherLoss        float64       // Percent of packets lost from the publisher to the gateway
+	MeetingLoss          float64       // Percent lost from the publisher to the meeting's server, both legs
+	Quality              int           // Connection quality as the meeting shows it, 0 to 100
+	RTT                  time.Duration // Gateway to the meeting's server
 }
 
 // GatewayEventKind is what a GatewayEvent reports.
@@ -146,7 +157,8 @@ func (g *Gateway) onEvent(e whip.Event) {
 }
 
 func streamFrom(i whip.Info) GatewayStream {
-	return GatewayStream{ID: i.ID, MeetingURL: i.MeetingURL, DisplayName: i.Name, Started: i.Started}
+	return GatewayStream{ID: i.ID, MeetingURL: i.MeetingURL, DisplayName: i.Name, Started: i.Started,
+		Stats: StreamStats(i.Stats)}
 }
 
 // Addr returns the HTTP address the gateway listens on.

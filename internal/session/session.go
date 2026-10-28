@@ -79,6 +79,7 @@ type SignalClient interface {
 	Connect(ctx context.Context, peerID string, handler signaling.SignalingHandler) error
 	Disconnect(peerID string) error
 	SetReceivePolicy(peerID string, p *signaling.ReceivePolicy)
+	SendEndpointStats(peerID string, st signaling.EndpointStats)
 }
 
 // newSignal builds the signaling client for a configuration (tests replace

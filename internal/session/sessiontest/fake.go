@@ -27,6 +27,7 @@ type Signal struct {
 	handler      signaling.SignalingHandler
 	bridge       *webrtc.PeerConnection
 	policies     []*signaling.ReceivePolicy
+	stats        []signaling.EndpointStats
 	disconnected bool
 	config       map[string]any
 }
@@ -94,6 +95,19 @@ func (f *Signal) SetReceivePolicy(_ string, p *signaling.ReceivePolicy) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.policies = append(f.policies, p)
+}
+
+func (f *Signal) SendEndpointStats(_ string, st signaling.EndpointStats) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stats = append(f.stats, st)
+}
+
+// Stats are the connection statistics the session sent, in order.
+func (f *Signal) Stats() []signaling.EndpointStats {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]signaling.EndpointStats(nil), f.stats...)
 }
 
 // LastPolicy is the last receive policy the session asked for.

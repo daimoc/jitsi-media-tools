@@ -40,9 +40,19 @@ type Request struct {
 // Stream is a published stream, as the Publisher started it.
 type Stream struct {
 	Answer string
-	End    func()          // Ends the stream; called once at most
-	Done   <-chan struct{} // Closed once the stream has ended, for any reason
-	Err    func() error    // Once Done: why it ended, nil when by End or the publisher's DELETE
+	End    func()             // Ends the stream; called once at most
+	Done   <-chan struct{}    // Closed once the stream has ended, for any reason
+	Err    func() error       // Once Done: why it ended, nil when by End or the publisher's DELETE
+	Stats  func() StreamStats // Optional: the latest statistics
+}
+
+// StreamStats are a stream's statistics over the last measuring interval.
+type StreamStats struct {
+	VideoKbps, AudioKbps int           // Forwarded
+	PublisherLoss        float64       // Percent of packets lost from the publisher
+	MeetingLoss          float64       // Percent lost from the publisher to the meeting's server
+	Quality              int           // Connection quality as Jitsi computes it, 0 to 100
+	RTT                  time.Duration // To the meeting's server
 }
 
 // Publisher starts streams. ctx bounds only the start, not the stream.
@@ -65,6 +75,7 @@ type Info struct {
 	MeetingURL string // Without the token
 	Name       string
 	Started    time.Time
+	Stats      StreamStats // Latest; zero in events
 }
 
 // EventKind is what happened to a stream.
@@ -99,9 +110,10 @@ type Handler struct {
 }
 
 type entry struct {
-	info Info
-	end  func()
-	once sync.Once
+	info  Info
+	end   func()
+	stats func() StreamStats // May be nil
+	once  sync.Once
 }
 
 func (e *entry) stop() { e.once.Do(e.end) }
@@ -198,7 +210,7 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, path string) {
 		return
 	}
 	id := newID()
-	e := &entry{info: Info{ID: id, MeetingURL: shown, Name: name, Started: time.Now()}, end: st.End}
+	e := &entry{info: Info{ID: id, MeetingURL: shown, Name: name, Started: time.Now()}, end: st.End, stats: st.Stats}
 	if !h.add(e) {
 		e.stop() // Closed while starting
 		http.Error(w, "the gateway is stopping", http.StatusServiceUnavailable)
@@ -292,7 +304,11 @@ func (h *Handler) Streams() []Info {
 	defer h.mu.Unlock()
 	out := make([]Info, 0, len(h.streams))
 	for _, e := range h.streams {
-		out = append(out, e.info)
+		i := e.info
+		if e.stats != nil {
+			i.Stats = e.stats()
+		}
+		out = append(out, i)
 	}
 	return out
 }

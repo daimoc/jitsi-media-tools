@@ -71,6 +71,7 @@ type Ingest struct {
 	videoSSRC atomic.Uint32
 	last      atomic.Int64 // Unix nanoseconds of the last packet, or of the start
 	lastPLI   atomic.Int64
+	counts    map[string]*seqCounter // By kind; fixed after NewIngest
 
 	done      chan struct{}
 	err       error // Set before done closes
@@ -113,7 +114,8 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	in := &Ingest{pc: pc, logger: cfg.Logger, kinds: kinds, dest: map[string]RTPWriter{}, done: make(chan struct{})}
+	in := &Ingest{pc: pc, logger: cfg.Logger, kinds: kinds, dest: map[string]RTPWriter{}, done: make(chan struct{}),
+		counts: map[string]*seqCounter{KindAudio: {}, KindVideo: {}}}
 	in.last.Store(time.Now().UnixNano())
 	pc.OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { go in.forward(t) })
 	pc.OnConnectionStateChange(func(s webrtc.PeerConnectionState) {
@@ -261,6 +263,7 @@ func (in *Ingest) forward(t *webrtc.TrackRemote) {
 		}
 		pkt.Header.Extension = false
 		pkt.Header.Extensions = nil
+		in.counts[kind].add(pkt.SequenceNumber, pkt.MarshalSize())
 		in.mu.Lock()
 		w := in.dest[kind]
 		in.mu.Unlock()
@@ -281,6 +284,51 @@ func (in *Ingest) forward(t *webrtc.TrackRemote) {
 		}
 		_ = w.WriteRTP(pkt)
 	}
+}
+
+// IngestStats counts what the publisher sent, per kind, since the start.
+type IngestStats struct{ Audio, Video KindStats }
+
+// KindStats counts one kind's packets: received, their bytes (RTP, as
+// forwarded), and lost on the way (sequence numbers never received).
+type KindStats struct{ Packets, Bytes, Lost uint64 }
+
+// Stats returns the counts so far.
+func (in *Ingest) Stats() IngestStats {
+	return IngestStats{Audio: in.counts[KindAudio].stats(), Video: in.counts[KindVideo].stats()}
+}
+
+// seqCounter counts a stream's packets and the sequence numbers missing
+// between the first and the highest received (RFC 3550 A.3).
+type seqCounter struct {
+	mu             sync.Mutex
+	started        bool
+	first, highest uint64 // Extended sequence numbers
+	packets, bytes uint64
+}
+
+func (c *seqCounter) add(seq uint16, size int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.packets++
+	c.bytes += uint64(size)
+	if !c.started {
+		c.started, c.first, c.highest = true, uint64(seq), uint64(seq)
+		return
+	}
+	if d := int16(seq - uint16(c.highest)); d > 0 { // Newer, across a wrap too
+		c.highest += uint64(d)
+	}
+}
+
+func (c *seqCounter) stats() KindStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	s := KindStats{Packets: c.packets, Bytes: c.bytes}
+	if expected := c.highest - c.first + 1; c.started && expected > c.packets {
+		s.Lost = expected - c.packets // Duplicates (retransmissions) may hide some
+	}
+	return s
 }
 
 // slowKeyframe is a wait for the first keyframe that shows the publisher

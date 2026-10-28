@@ -14,6 +14,7 @@ import (
 	"github.com/pion/webrtc/v3"
 
 	"github.com/daimoc/jitsi-media-tools/internal/peer"
+	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 	"github.com/daimoc/jitsi-media-tools/internal/whip"
 )
 
@@ -223,5 +224,85 @@ func TestGateway_JoinFailure(t *testing.T) {
 	pub := newWHIPPublisher(t, h264High)
 	if _, err := g.Publish(context.Background(), whip.Request{MeetingURL: "https://meet.test/Room", Name: "OBS", Offer: pub.offer(t)}); !errors.Is(err, errFake) {
 		t.Fatalf("Publish: %v, want the join error", err)
+	}
+}
+
+func TestQuality(t *testing.T) {
+	for _, c := range []struct {
+		loss float64
+		want int
+	}{{0, 100}, {2, 100}, {2.5, 70}, {4, 70}, {5, 50}, {7, 30}, {10, 10}, {12, 10}, {12.1, 0}, {50, 0}} {
+		if got := quality(c.loss); got != c.want {
+			t.Errorf("quality(%v) = %d, want %d", c.loss, got, c.want)
+		}
+	}
+}
+
+func TestStreamStats_Window(t *testing.T) {
+	var w statsWindow
+	t0 := time.Unix(100, 0)
+	w.next(peer.IngestStats{}, 0, 0, t0)
+	got := w.next(peer.IngestStats{
+		Video: peer.KindStats{Packets: 900, Bytes: 1_250_000, Lost: 100},
+		Audio: peer.KindStats{Packets: 500, Bytes: 40_000},
+	}, 10, 0, t0.Add(5*time.Second))
+	if got.VideoKbps != 2000 || got.AudioKbps != 64 {
+		t.Errorf("bitrates %d and %d kbps, want 2000 and 64", got.VideoKbps, got.AudioKbps)
+	}
+	// 100 lost of 1500 expected from the publisher; the bridge reports 10 %
+	// of video and 0 % of audio lost, weighted by packets: 6.43 %, which
+	// already includes the publisher's gaps.
+	if got.PublisherLoss < 6.66 || got.PublisherLoss > 6.67 {
+		t.Errorf("publisher loss %v%%, want 6.67", got.PublisherLoss)
+	}
+	if got.MeetingLoss != got.PublisherLoss {
+		t.Errorf("meeting loss %v%%, want the larger of the publisher's (%v) and the bridge's (6.43)", got.MeetingLoss, got.PublisherLoss)
+	}
+	if bigger := w.next(peer.IngestStats{
+		Video: peer.KindStats{Packets: 1800, Bytes: 2_500_000, Lost: 100},
+		Audio: peer.KindStats{Packets: 1000, Bytes: 80_000},
+	}, 20, 0, t0.Add(10*time.Second)); bigger.MeetingLoss < 12.85 || bigger.MeetingLoss > 12.86 {
+		t.Errorf("meeting loss %v%%, want the bridge's 12.86 (20 %% of 900 video of 1400)", bigger.MeetingLoss)
+	}
+	if got.Quality != quality(got.MeetingLoss) {
+		t.Errorf("quality %d for %v%% loss", got.Quality, got.MeetingLoss)
+	}
+	// Counts that did not move give zeros, not a division by zero.
+	if z := w.next(w.prev, 0, 0, t0.Add(15*time.Second)); z.VideoKbps != 0 || z.PublisherLoss != 0 || z.Quality != 100 {
+		t.Errorf("idle window %+v", z)
+	}
+}
+
+func TestGateway_ReportsStatsToTheMeeting(t *testing.T) {
+	f := &fakeSignal{}
+	useFake(t, f)
+	g := NewGateway(GatewayConfig{Session: Config{Logger: quietLogger}, StatsInterval: 300 * time.Millisecond})
+	pub := newWHIPPublisher(t, h264High)
+	st, err := g.Publish(context.Background(), whip.Request{MeetingURL: "https://meet.test/Room", Name: "OBS", Offer: pub.offer(t)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.End()
+	if err := pub.pc.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: st.Answer}); err != nil {
+		t.Fatal(err)
+	}
+	stop := make(chan struct{})
+	defer close(stop)
+	go pub.send(stop)
+	var last signaling.EndpointStats
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+		if s := f.Stats(); len(s) > 0 && s[len(s)-1].VideoUploadKbps > 0 {
+			last = s[len(s)-1]
+			break
+		}
+	}
+	if last.VideoUploadKbps == 0 || last.AudioUploadKbps == 0 || last.UploadKbps != last.VideoUploadKbps+last.AudioUploadKbps {
+		t.Fatalf("stats sent %+v, want video and audio bitrates", last)
+	}
+	if last.Quality != 100 || last.UploadLoss != 0 {
+		t.Errorf("stats %+v, want no loss and quality 100 on loopback", last)
+	}
+	if s := st.Stats(); s.VideoKbps == 0 || s.Quality != 100 {
+		t.Errorf("Stream.Stats() = %+v", s)
 	}
 }

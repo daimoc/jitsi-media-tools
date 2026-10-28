@@ -251,6 +251,16 @@ func (a *Adapter) Disconnect(peerID string) error {
 	return nil
 }
 
+// SendEndpointStats sends a peer's connection statistics to the meeting.
+func (a *Adapter) SendEndpointStats(peerID string, st signaling.EndpointStats) {
+	a.mu.Lock()
+	client := a.clients[peerID]
+	a.mu.Unlock()
+	if client != nil {
+		client.SendEndpointStats(st)
+	}
+}
+
 // SetReceivePolicy sets which video the bridge forwards to a connected peer
 // (see SignalingClient.SetReceivePolicy). It does nothing for an unknown
 // peer.

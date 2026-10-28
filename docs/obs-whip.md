@@ -99,6 +99,23 @@ What gives a better picture, and what it costs:
 | Keyframe Interval | 2 s instead of 1 s | Saves a little bitrate; viewers may wait up to 2 s for the picture |
 | Audio bitrate (Output → Audio) | 128 kbps for music; 64–96 kbps is enough for speech | Small |
 
+## Watching the stream's health in the meeting
+
+Click the signal bars on the OBS tile in the Jitsi meeting to open its connection details. The
+gateway reports them every 10 s, as a browser participant reports its own:
+
+| Field | What it shows for an OBS stream |
+|---|---|
+| Bitrate (upload) | What the gateway forwards from OBS: video and audio |
+| Packet loss (upload) | Packets lost on the way from OBS to the meeting's server, both legs |
+| Connection | From that loss, as Jitsi rates a connection: Good up to 2 %, then lower bands up to 12 %, Lost above |
+| Resolution, frame rate, codec | Measured by your own browser on what it receives |
+
+Loss from OBS shows up here before viewers see frozen or blocky video: lower OBS's bitrate if
+it stays above 2 %. `jmt.Gateway.Streams()` gives the same figures to a program, with the
+loss from OBS to the gateway alone (`PublisherLoss`) to tell OBS's network from the
+gateway's.
+
 ## Three starting points
 
 | | Quick start, low delay | Balanced | Best picture |
@@ -120,7 +137,9 @@ preset or the resolution is too heavy for the machine.
 - **Measured** on a local Jitsi server, with ffmpeg 8's WHIP client standing in for OBS (x264,
   High profile, Opus):
   - the start-up steps and the keyframe waits above;
-  - High-profile H.264 playing in Chrome 154 and Firefox 155 at 1280x720 and 30 fps.
+  - High-profile H.264 playing in Chrome 154 and Firefox 155 at 1280x720 and 30 fps;
+  - the connection details in Chrome: about 2,000 kbps and 0 % loss for a clean stream, and
+    6 % loss with connection quality 30 for a publisher dropping 5 % of its packets.
 - **Not measured with OBS itself:**
   - whether it honours keyframe requests (ffmpeg does not);
   - the delay each setting adds;

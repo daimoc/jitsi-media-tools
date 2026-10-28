@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
 
 // logBuffer is a concurrency-safe log destination.
@@ -350,4 +352,39 @@ func TestBridgeHeight(t *testing.T) {
 			t.Errorf("bridgeHeight(%d, %v) = %d, want %d", tc.height, tc.layers, got, tc.want)
 		}
 	}
+}
+
+// Endpoint statistics go out in lib-jitsi-meet's EndpointStats format,
+// only while the channel is open; they are not kept for later.
+func TestBridgeChannel_SendsEndpointStats(t *testing.T) {
+	b, c, _ := newTestBridgeChannel(t)
+	st := signaling.EndpointStats{
+		UploadKbps: 2564, AudioUploadKbps: 64, VideoUploadKbps: 2500,
+		UploadLoss: 3.46, TotalLoss: 3.46, Quality: 70, RTT: 12400 * time.Microsecond,
+	}
+	b.sendStats(st)
+	expectNothingSent(t, c)
+	c.open(t)
+	expectSent(t, c) // Video constraints on open
+	b.sendStats(st)
+	jsonEqual(t, expectSent(t, c), `{"colibriClass":"EndpointStats",
+		"bitrate":{"upload":2564,"download":0,"audio":{"upload":64,"download":0},"video":{"upload":2500,"download":0}},
+		"packetLoss":{"upload":3,"download":0,"total":3},
+		"connectionQuality":70,"jvbRTT":12,"serverRegion":null}`)
+	for d, want := range map[time.Duration]int64{0: 0, 470 * time.Microsecond: 1, 12400 * time.Microsecond: 12, 12600 * time.Microsecond: 13} {
+		if got := rttMillis(d); got != want {
+			t.Errorf("rttMillis(%v) = %d, want %d", d, got, want)
+		}
+	}
+	b.sendStats(st) // Periodic: sent again even if unchanged
+	if m := expectSent(t, c); colibriClass(t, m) != "EndpointStats" {
+		t.Fatalf("second stats not sent: %s", m)
+	}
+	c.close(t)
+	b.sendStats(st)
+	c.open(t)
+	if m := expectSent(t, c); colibriClass(t, m) != "ReceiverVideoConstraints" {
+		t.Fatalf("after reopen: %s, want only the constraints, not old stats", m)
+	}
+	expectNothingSent(t, c)
 }

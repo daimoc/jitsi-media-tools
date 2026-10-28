@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
 )
@@ -226,4 +227,47 @@ func TestPeer_TrackSurvivesCodecSwitch(t *testing.T) {
 		}
 	}
 	t.Error("codec switch to VP8 not seen")
+}
+
+// The peer follows the loss the remote side reports about what it sends,
+// and its round-trip time.
+func TestPeer_UploadLossAndRTT(t *testing.T) {
+	p := newTestPeer(t, KindVideo)
+	remote, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { remote.Close() })
+	if _, err := remote.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
+		t.Fatal(err)
+	}
+	got := make(chan uint32, 1)
+	remote.OnTrack(func(tr *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { got <- uint32(tr.SSRC()) })
+	connect(t, remote, p)
+	var ssrc uint32
+	for i := 0; ssrc == 0 && i < 250; i++ {
+		select {
+		case ssrc = <-got:
+		default:
+			p.LocalTrack(KindVideo).WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: uint16(i)}, Payload: []byte{1}})
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	if ssrc == 0 {
+		t.Fatal("no video reached the remote side")
+	}
+	if l := p.UploadLoss(KindVideo); l != 0 {
+		t.Errorf("loss %v before any report, want 0", l)
+	}
+	remote.WriteRTCP([]rtcp.Packet{&rtcp.ReceiverReport{SSRC: 1, Reports: []rtcp.ReceptionReport{{SSRC: ssrc, FractionLost: 64}}}})
+	for deadline := time.Now().Add(3 * time.Second); p.UploadLoss(KindVideo) == 0 && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+	}
+	if l := p.UploadLoss(KindVideo); l != 25 {
+		t.Errorf("loss %v%%, want 25%% (64/256)", l)
+	}
+	for deadline := time.Now().Add(3 * time.Second); p.RTT() == 0 && time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+	}
+	if rtt := p.RTT(); rtt <= 0 || rtt > time.Second {
+		t.Errorf("RTT %v, want a small positive value on loopback", rtt)
+	}
 }

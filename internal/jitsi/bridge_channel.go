@@ -3,6 +3,7 @@ package jitsi
 import (
 	"encoding/json"
 	"log/slog"
+	"math"
 	"sync"
 	"time"
 
@@ -303,6 +304,61 @@ func (b *bridgeChannel) sendLocked() {
 		b.lastSent[m.class] = m.text
 		b.logger.Debug("Bridge channel message sent", slog.String("message", m.text))
 	}
+}
+
+// sendStats sends the participant's connection statistics if the channel
+// is open; they are periodic, so nothing is kept for later.
+func (b *bridgeChannel) sendStats(st signaling.EndpointStats) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.open || b.dc == nil || b.stopped {
+		return
+	}
+	text := endpointStatsMessage(st)
+	if err := b.dc.SendText(text); err != nil {
+		b.logOnceLocked("send-stats", "Failed to send statistics on the bridge channel", slog.String("error", err.Error()))
+		return
+	}
+	b.logger.Debug("Bridge channel message sent", slog.String("message", text))
+}
+
+// endpointStatsMessage builds lib-jitsi-meet's EndpointStats message:
+// bitrates in kbps, losses in whole percent, RTT in ms (research R14).
+func endpointStatsMessage(st signaling.EndpointStats) string {
+	type updown struct {
+		Upload   int `json:"upload"`
+		Download int `json:"download"`
+	}
+	m := struct {
+		Class   string `json:"colibriClass"`
+		Bitrate struct {
+			updown
+			Audio updown `json:"audio"`
+			Video updown `json:"video"`
+		} `json:"bitrate"`
+		PacketLoss struct {
+			updown
+			Total int `json:"total"`
+		} `json:"packetLoss"`
+		Quality      int     `json:"connectionQuality"`
+		RTT          int64   `json:"jvbRTT"`
+		ServerRegion *string `json:"serverRegion"`
+	}{Class: "EndpointStats", Quality: st.Quality, RTT: rttMillis(st.RTT)}
+	m.Bitrate.updown = updown{st.UploadKbps, st.DownloadKbps}
+	m.Bitrate.Audio = updown{Upload: st.AudioUploadKbps}
+	m.Bitrate.Video = updown{Upload: st.VideoUploadKbps}
+	m.PacketLoss.updown = updown{int(math.Round(st.UploadLoss)), int(math.Round(st.DownloadLoss))}
+	m.PacketLoss.Total = int(math.Round(st.TotalLoss))
+	return marshalMessage(m)
+}
+
+// rttMillis rounds a round-trip time to whole ms, at least 1 when measured
+// (0 would read as unknown).
+func rttMillis(d time.Duration) int64 {
+	if d <= 0 {
+		return 0
+	}
+	return max(1, int64(math.Round(float64(d)/float64(time.Millisecond))))
 }
 
 // logOnceLocked logs msg at Info the first time reason occurs.

@@ -102,6 +102,8 @@ type Peer struct {
 
 	feedback *transportFeedback // Transport-wide congestion control feedback
 
+	uploadLoss map[string]*atomic.Uint32 // By kind: fraction lost (of 256) in the remote side's last report
+
 	// SSRCs whose incoming packets are kept: the applied offer's and the
 	// peer's own (RTCP about them). Read on every incoming packet.
 	allowed    atomic.Pointer[map[uint32]bool]
@@ -132,6 +134,7 @@ func New(cfg Config) (*Peer, error) {
 		feedback:      newTransportFeedback(),
 	}
 	p.allowed.Store(&map[uint32]bool{})
+	p.uploadLoss = map[string]*atomic.Uint32{KindAudio: {}, KindVideo: {}}
 	pc, err := newPeerConnection(p)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer connection: %w", err)
@@ -211,17 +214,34 @@ func (p *Peer) OnKeyframeRequest(f func()) {
 }
 
 // readRTCP reads the RTCP the remote side sends about a local track (Pion's
-// interceptors, e.g. the NACK responder, only see packets that are read).
+// interceptors, e.g. the NACK responder, only see packets that are read):
+// its loss reports, and keyframe requests for video.
 func (p *Peer) readRTCP(kind string, sender *webrtc.RTPSender) {
+	var ssrc uint32
+	if enc := sender.GetParameters().Encodings; len(enc) > 0 {
+		ssrc = uint32(enc[0].SSRC)
+	}
 	for {
 		packets, _, err := sender.ReadRTCP()
 		if err != nil {
 			return // Connection closed
 		}
-		if kind != KindVideo {
-			continue
-		}
 		for _, pkt := range packets {
+			var reports []rtcp.ReceptionReport
+			switch r := pkt.(type) {
+			case *rtcp.ReceiverReport:
+				reports = r.Reports
+			case *rtcp.SenderReport:
+				reports = r.Reports
+			}
+			for _, r := range reports {
+				if r.SSRC == ssrc {
+					p.uploadLoss[kind].Store(uint32(r.FractionLost))
+				}
+			}
+			if kind != KindVideo {
+				continue
+			}
 			switch pkt.(type) {
 			case *rtcp.PictureLossIndication, *rtcp.FullIntraRequest:
 				p.cbMu.Lock()
@@ -249,6 +269,27 @@ func (p *Peer) handleTrack(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
 	if f != nil {
 		f(t)
 	}
+}
+
+// UploadLoss returns the percentage of the sent packets of kind that the
+// remote side last reported lost (0 before any report).
+func (p *Peer) UploadLoss(kind string) float64 {
+	l := p.uploadLoss[kind]
+	if l == nil {
+		return 0
+	}
+	return float64(l.Load()) * 100 / 256
+}
+
+// RTT returns the round-trip time of the selected ICE candidate pair, 0
+// when unknown.
+func (p *Peer) RTT() time.Duration {
+	for _, s := range p.pc.GetStats() {
+		if pair, ok := s.(webrtc.ICECandidatePairStats); ok && pair.Nominated && pair.CurrentRoundTripTime > 0 {
+			return time.Duration(pair.CurrentRoundTripTime * float64(time.Second))
+		}
+	}
+	return 0
 }
 
 // RequestKeyframe sends a picture loss indication about a received stream.
