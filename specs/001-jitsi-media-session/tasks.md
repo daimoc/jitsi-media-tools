@@ -180,8 +180,8 @@ H.264 and Opus forwarded unchanged (research R14).
 
 **Independent Test**: quickstart scenario 6.
 
-- [ ] T057 [P] [US6] Test `internal/output/record_test.go` (ffmpeg): per-participant and mixed modes write `<dir>/<room>-<YYYYMMDD-HHMMSS>-<name>.mkv` / `…-mixed.mkv`; after SIGINT-equivalent stop (`Process.Stop`) the file is readable by `ffprobe`-equivalent (`ffmpeg -i file -f null -`) with audio and video
-- [ ] T058 [US6] Implement `internal/output/record.go`: mixed = extra Matroska output on the grid ffmpeg (`-c:v libx264 -preset veryfast -c:a aac`, `-flush_packets 1`, `-cluster_time_limit 1000`); per participant = Matroska output on the participant's feed ffmpeg via `-f tee` (`[f=mpegts]srt://…|[f=matroska]file.mkv`) or a dedicated ffmpeg when no feed; file names sanitized (no path separators)
+- [X] T057 [P] [US6] Test `internal/output/record_test.go` (ffmpeg): per-participant and mixed modes write `<dir>/<room>-<YYYYMMDD-HHMMSS>-<name>.mkv` / `…-mixed.mkv`; after SIGINT-equivalent stop (`Process.Stop`) the file is readable by `ffprobe`-equivalent (`ffmpeg -i file -f null -`) with audio and video
+- [ ] T058 [US6] Implement `internal/output/record.go`: one ffmpeg per recording, mixed or per participant (`-c:v libx264 -preset veryfast -c:a aac`, `-flush_packets 1`, `-cluster_time_limit 1000`), not a tee on the feed's ffmpeg, which only runs while OBS watches (R11, revised 2026-10-28); file names sanitized (no path separators); the session opens a participant's recording on their first video or audio and keeps the file across leave/rejoin
 - [ ] T059 [US6] `jmt.Options.Record`, CLI `--record DIR --record-mode per-participant|mixed`; `feeds.json` written in DIR when OBS is on; hand check scenario 6; commit
 
 ---

@@ -178,6 +178,13 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   - **Per participant**: one ffmpeg per participant who has an output, encoding H.264
     (`veryfast`, `zerolatency`) + AAC once and writing to its recording file and/or its SRT
     feed (`-f tee`).
+  - **Recordings** (revised 2026-10-28): each recording, per participant or mixed, has its
+    own ffmpeg (NUT on stdin → H.264 `veryfast` + AAC → Matroska, `-flush_packets 1
+    -cluster_time_limit 1000`), not an extra output of the feed's ffmpeg: a feed's ffmpeg
+    waits for an OBS caller before it encodes and restarts when OBS leaves, so a file there
+    would only cover the time OBS watched, in pieces. A participant with both a feed and a
+    recording is encoded twice while OBS watches. Stop closes stdin so ffmpeg writes the
+    cues; a killed tool leaves a file playable up to its last 1 s cluster.
   - **OBS feeds**: `srt://0.0.0.0:<port>?mode=listener&latency=120000` — the grid on
     `--obs-port` (default 9000), participants on the following ports assigned in order of
     first appearance and kept for the session (FR-017). Feeds exist for participants who
