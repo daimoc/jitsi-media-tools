@@ -75,6 +75,32 @@ and 85 ms for audio. With both queues set to 2, everything after the encoder mov
   shows the same 85 ms bursts. Reading options (`-avioflags direct`, `-blocksize`) and
   Ogg options (`-page_duration`, `-max_delay`) don't change it.
 
+### Publisher: camera and microphone (video ~120 ms to RTP, was ~490)
+
+Measured on Linux (integrated USB webcam, PipeWire microphone) from the frame's capture
+time (V4L2 timestamp, carried through the encoder with `-copyts -ts abs`) to its RTP
+packets leaving: **≈ 120 ms median, 187 ms 95th percentile** (was ≈ 490 ms). Three
+causes, each fixed:
+
+- **Raw video at 10 fps.** The camera sends raw YUYV 1280x720 at 10 fps (USB 2 is full).
+  The tool asks ffmpeg for the camera's compressed formats and captures Motion-JPEG at
+  30 fps when offered.
+- **Camera held back to the microphone (~430 ms).** The camera and microphone are two
+  ffmpeg inputs, and ffmpeg starts each input's timestamps at zero. The microphone opens
+  about 0.4 s after the camera, so ffmpeg held every camera frame back by that gap to keep
+  the two in step. With `-copyts` and the camera's timestamps on the wall clock
+  (`-ts abs`), as PulseAudio's are, both keep their capture times. Capture to the filter
+  went from 434 to 46 ms.
+- **Start-up burst never drained (~370 ms).** ffmpeg's output started with a burst, and
+  the sender paced every frame by its duration, so the burst stayed queued in the pipe
+  and channels for the whole session. The pump now sends at once a frame that has others
+  queued behind it, and paces from there; RTP timestamps still advance by each frame's
+  duration. File and `FrameSource` publishing benefit from this too.
+
+The microphone is read in 20 ms fragments (`-fragment_size 3840`), which cut its capture
+delay from 59 to 29 ms. Not measured: the camera's own delay before its timestamp, and
+the browser's jitter buffer.
+
 ### Network and Videobridge (< 1 ms locally)
 
 The viewer received the flash frames 0.3–0.5 ms after the publisher sent them. On a real

@@ -90,7 +90,14 @@ func NewAudioSender(w TrackWriter) *Sender {
 
 // Send waits until f is due and writes it. It returns ctx's error if ctx
 // ends first; write errors (connection closing) are ignored.
-func (s *Sender) Send(ctx context.Context, f Frame) error {
+func (s *Sender) Send(ctx context.Context, f Frame) error { return s.send(ctx, f, false) }
+
+// SendNow writes f without waiting for it to be due: the source is behind.
+// The timestamp still advances by f's duration; the frames that follow are
+// due from now.
+func (s *Sender) SendNow(ctx context.Context, f Frame) error { return s.send(ctx, f, true) }
+
+func (s *Sender) send(ctx context.Context, f Frame, catchUp bool) error {
 	now := s.clock.Now()
 	switch {
 	case !s.started:
@@ -106,6 +113,9 @@ func (s *Sender) Send(ctx context.Context, f Frame) error {
 			s.ts += f.Samples
 			s.due = due
 		}
+	}
+	if catchUp && s.due.After(now) {
+		s.due = now
 	}
 	if !s.clock.SleepUntil(ctx, s.due) {
 		return ctx.Err()

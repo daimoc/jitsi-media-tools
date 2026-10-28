@@ -15,6 +15,10 @@ import (
 // publishNeeds are the ffmpeg parts publishing uses.
 var publishNeeds = []string{ffmpeg.NeedVP8Encoder, ffmpeg.NeedOpusEncoder, ffmpeg.NeedTCP}
 
+// pumpQueue is the depth of the channels into the pumps: frames queued
+// there show a pump that its source is behind, so it catches up.
+const pumpQueue = 8
+
 // publisher runs the encoder of the publish source and sends its frames on
 // the peer's tracks (research R5). Each kind has one long-lived frame
 // channel fed by successive encoder runs, so that its pump sends one
@@ -72,10 +76,10 @@ func (m *media) preparePublish(ctx context.Context, p *Publish) error {
 			return fmt.Errorf("video placeholder: %w", err)
 		}
 		pb.black = black
-		pb.video = make(chan rtpmedia.Frame)
+		pb.video = make(chan rtpmedia.Frame, pumpQueue)
 	}
 	if p.Audio {
-		pb.audio = make(chan rtpmedia.Frame)
+		pb.audio = make(chan rtpmedia.Frame, pumpQueue)
 	}
 	m.pub = pb
 	return nil

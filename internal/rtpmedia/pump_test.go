@@ -62,3 +62,28 @@ func TestPump_StopsWithContext(t *testing.T) {
 		t.Fatal("Pump did not stop")
 	}
 }
+
+// Frames already queued behind the one being sent mean the source is
+// behind (a live source's start-up burst): they go out at once, with
+// timestamps still a frame apart, so the backlog does not become lasting
+// latency.
+func TestPump_CatchesUpQueuedFrames(t *testing.T) {
+	rec := &recorder{}
+	in := make(chan Frame, 10)
+	for range 10 {
+		in <- Frame{Data: []byte{0xbb}, Duration: 100 * time.Millisecond, Samples: OpusSamples * 5}
+	}
+	close(in)
+	start := time.Now()
+	if err := Pump(context.Background(), NewAudioSender(rec), in, nil); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d > 300*time.Millisecond {
+		t.Errorf("10 queued frames took %v to send, want them sent at once (paced: 900 ms)", d)
+	}
+	for i := 1; i < len(rec.pkts); i++ {
+		if step := rec.pkts[i].Timestamp - rec.pkts[i-1].Timestamp; step != OpusSamples*5 {
+			t.Fatalf("timestamp step %d at %d, want %d", step, i, OpusSamples*5)
+		}
+	}
+}

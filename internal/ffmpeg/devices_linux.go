@@ -49,10 +49,26 @@ func cameraFormat(ctx context.Context, bin, dev string) string {
 	return parseV4L2Formats(string(b))
 }
 
+// pulseFragment is the microphone's read size: 20 ms of 48 kHz stereo
+// s16. The server's default holds about 60 ms.
+const pulseFragment = "3840"
+
+// deviceInput captures the camera and the microphone as two inputs. ffmpeg
+// starts each input's timestamps at zero, so the one opened first (the
+// camera, opened about 0.4 s before the microphone) would be held back by
+// the gap to stay in step with the other. With -copyts and the camera's
+// timestamps on the wall clock (-ts abs), as the microphone's are, both keep
+// their capture times and neither waits.
 func deviceInput(video, audio *Device, w, h int) (args []string, videoMap, audioMap string) {
 	n := 0
+	if video != nil && audio != nil {
+		args = append(args, "-copyts")
+	}
 	if video != nil {
 		args = append(args, "-f", "v4l2")
+		if audio != nil {
+			args = append(args, "-ts", "abs")
+		}
 		if video.Format != "" {
 			args = append(args, "-input_format", video.Format)
 		}
@@ -64,7 +80,7 @@ func deviceInput(video, audio *Device, w, h int) (args []string, videoMap, audio
 		if dev, ok := strings.CutPrefix(audio.Input, "alsa:"); ok {
 			args = append(args, "-f", "alsa", "-i", dev)
 		} else {
-			args = append(args, "-f", "pulse", "-i", audio.Input)
+			args = append(args, "-f", "pulse", "-fragment_size", pulseFragment, "-i", audio.Input)
 		}
 		audioMap = fmt.Sprintf("%d:a:0", n)
 	}

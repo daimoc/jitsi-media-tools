@@ -121,5 +121,9 @@ Found and fixed during the check:
 
 - The camera gave 10 fps: in raw YUYV at 1280x720 it fills USB 2. The tool now asks ffmpeg
   for the camera's compressed formats and captures Motion-JPEG when offered.
+- The user saw about 1 s of delay on the camera in the browser. Frames left as RTP about
+  490 ms after capture: ffmpeg held the camera back by the gap between opening it and the
+  microphone, and the sender kept the start-up burst as a lasting queue. Now about 120 ms
+  (docs/latency.md, "camera and microphone").
 - ffmpeg 8 lists V4L2 as `video4linux2,v4l2`; the capability probe read the first alias
   only, so a device need of `v4l2` looked missing. Both aliases now count.

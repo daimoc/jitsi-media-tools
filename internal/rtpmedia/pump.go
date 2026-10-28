@@ -29,7 +29,8 @@ func VideoPlaceholder(keyframe []byte) *Placeholder {
 }
 
 // Pump sends the frames of in through s until in closes (nil) or ctx ends
-// (its error). While in has no frame for ph.After, it sends ph.Frame
+// (its error). Frames are paced by their durations, except that a frame
+// with others queued behind it goes out at once. While in has no frame for ph.After, it sends ph.Frame
 // instead, until in has data again. A nil ph sends nothing in the gaps.
 func Pump(ctx context.Context, s *Sender, in <-chan Frame, ph *Placeholder) error {
 	var timer *time.Timer
@@ -66,7 +67,14 @@ func Pump(ctx context.Context, s *Sender, in <-chan Frame, ph *Placeholder) erro
 				default:
 				}
 			}
-			if err := s.Send(ctx, f); err != nil {
+			send := s.Send
+			if len(in) > 0 {
+				// More frames wait behind this one: the source is behind
+				// (a live source's start-up burst), so catch up rather than
+				// keep the backlog as latency.
+				send = s.SendNow
+			}
+			if err := send(ctx, f); err != nil {
 				return err
 			}
 			wait(ph.After)
