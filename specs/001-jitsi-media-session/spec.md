@@ -198,6 +198,10 @@ follow the speakers, and a pinned participant stays shown when others talk.
    including when they are not speaking, and at the higher resolution if one was asked for.
 3. **Given** display, recording and OBS feeds are all on, **Then** all three use the same set of
    participants.
+4. **Given** a received-video budget (e.g. 3 Mbps) below what the selection would need, **Then**
+   the received video stays within it, giving up first the resolution of unpinned participants,
+   then their number, then the pinned participants' resolution, never a pinned participant; and
+   comes back when the budget allows (added 2026-10-29).
 
 ---
 
@@ -346,6 +350,13 @@ streaming and "OBS" leaves.
   connection quality and its round-trip time to the bridge, so that the meeting's connection
   details for that participant show them; the same figures MUST be available through the
   library (added 2026-10-28).
+- **FR-033**: The operator MUST be able to set a total bitrate budget for received video. The
+  tool MUST keep received video within it on any deployment, lowering in this order the
+  resolution of unpinned participants, the number of unpinned participants, then the resolution
+  of pinned participants, and never dropping a pinned participant (a warning says when the
+  budget cannot cover them); it MUST restore them when the budget allows. The budget is also
+  given to the bridge, which enforces it where its operator allows receivers to set their
+  bandwidth (added 2026-10-29).
 
 **Library**
 

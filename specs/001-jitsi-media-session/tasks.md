@@ -205,8 +205,10 @@ H.264 and Opus forwarded unchanged (research R14).
 **Independent Test**: quickstart scenario 8.
 
 - [X] T063 [P] [US8] Test `internal/session/selection_test.go`: policy → `ReceivePolicy` (`LastN = Limit`; pinned participants' video source names in `Selected` and `OnStage`; `DefaultMaxHeight = Height`; `MaxHeights[pinSource] = PinHeight`); pins matched case-insensitively, re-applied on join/rename; more pins than Limit → first Limit kept + one warning; re-sent on change
-- [ ] T064 [US8] Implement `internal/session/selection.go` and `Session.SetSelection`; decoders restarted at the new height when a participant's requested height changes; tile order from dominant-speaker events (T017); display, recording and feeds share the one selection (FR-013)
-- [ ] T065 [US8] CLI `--video-limit --video-height --pin (repeatable) --pin-height`; hand check scenario 8 with 20 load-engine bots; record CPU and the 30-minute run (SC-005) in `checklists/validation.md`; commit
+- [X] T064 [US8] Implement `internal/session/selection.go` and `Session.SetSelection`; decoders restarted at the new height when a participant's requested height changes; tile order from dominant-speaker events (T017); display, recording and feeds share the one selection (FR-013)
+- [ ] T083 [P] [US8] Test `internal/session/budget_test.go`: the ladder from a selection (unpinned height, then unpinned count, then pin height; pins kept; at least one video); level choice from measured bitrate (down after two windows over, up within 85% after 10 s); `assumedBandwidthBps` in the bridge message (FR-033)
+- [ ] T084 [US8] Implement `internal/session/budget.go`: received video bytes per participant, the 2 s control loop, the reduced selection sent through `applySelection`; `Selection.Budget` in `jmt`; one warning when pins do not fit
+- [ ] T065 [US8] CLI `--video-limit --video-height --pin (repeatable) --pin-height --video-budget`; hand check scenario 8 (with a budget) with 20 load-engine bots; record CPU and the 30-minute run (SC-005) in `checklists/validation.md`; commit
 
 ---
 

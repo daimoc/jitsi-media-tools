@@ -152,3 +152,40 @@ func TestReceive_ScreenShareHasItsOwnTile(t *testing.T) {
 		t.Errorf("tiles after the share %v, want Alice only", got)
 	}
 }
+
+// Pinning a participant restarts their decoder at the pinned height (T064).
+func TestReceive_PinChangesDecodedHeight(t *testing.T) {
+	f := &fakeSignal{Occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
+	useFake(t, f)
+	sessiontest.NewSender(f, "alice1")
+	var col collected
+	s, err := Start(context.Background(), col.config(Config{MeetingURL: "https://meet.test/Room", DisplayName: "Viewer", Receive: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	var mu sync.Mutex
+	height := 0
+	s.SetOnVideo(func(_ string, fr *compose.Frame, _ time.Time) {
+		mu.Lock()
+		height = fr.H
+		mu.Unlock()
+	})
+	waitHeight := func(want int) {
+		t.Helper()
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
+			mu.Lock()
+			h := height
+			mu.Unlock()
+			if h == want {
+				return
+			}
+		}
+		t.Fatalf("decoded height %d, want %d", height, want)
+	}
+	waitHeight(180)
+	if err := s.SetSelection(Selection{Pins: []string{"alice"}}); err != nil {
+		t.Fatal(err)
+	}
+	waitHeight(720)
+}

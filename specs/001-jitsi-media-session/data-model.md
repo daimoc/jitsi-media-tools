@@ -67,9 +67,11 @@ Common: Width, Height (default 1280x720), FPS 30, Audio/Video enabled flags.
 | Height | 180 | 180, 360 or 720 |
 | Pins | [] | display names; at most Limit applied, extra pins logged |
 | PinHeight | 720 | 180, 360 or 720 |
+| Budget | 0 (none) | received video in bits/s; ≥ 100 kbps when set (FR-033) |
 
 The bridge receives `lastN = Limit`, pinned sources as selected/on-stage, Height as the
-default max height and PinHeight for pins (R8).
+default max height and PinHeight for pins (R8). With a Budget, the session sends a reduced
+selection fitting it (R8, budget) and `assumedBandwidthBps = Budget`.
 
 ## Media units (public)
 

@@ -132,6 +132,20 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
   The copied `bridge_channel.go` already sends these messages (with a different policy);
   it is extended, not rewritten.
 - **Alternatives**: receiving everything and choosing locally (bandwidth, decoders).
+- **Budget (added 2026-10-29, FR-033)**: the bridge accepts `assumedBandwidthBps` in
+  `ReceiverVideoConstraints` in place of its bandwidth estimate, but only when its operator
+  sets `videobridge.cc.assumed-bandwidth-limit` (unset by default, checked in the
+  docker-jitsi-meet bridge). So the session sends it and also keeps the budget itself: a
+  ladder of reduced selections from the configured one (unpinned height down to 180, then
+  unpinned count down one by one, then pinned height 720 → 360 → 180; pins are never
+  dropped, nor the last video when nothing is pinned). Each level's cost is estimated from
+  typical simulcast layer rates (180p 200 kbps, 360p 700 kbps, 720p 2.5 Mbps) scaled by the
+  ratio of the measured received video bitrate to the estimate for what arrives, every 2 s.
+  The session moves down to the most generous level that fits after two windows over budget,
+  and up only to a level estimated within 85% of the budget, 10 s after the last move down.
+  Decoders keep their output size: the bridge's layer changes need no restart.
+  Alternatives: the bridge alone (not available on most deployments); a fixed table without
+  measurement (codecs and motion vary the rates several-fold).
 
 ## R9. Participant identity
 

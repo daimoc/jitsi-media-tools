@@ -25,6 +25,7 @@ jitsi-media-tools serve [options]      # WHIP gateway (US9); secret in $WHIP_API
 | `--record DIR` / `--record-mode per-participant\|mixed` | Record | off / per-participant |
 | `--obs` / `--obs-host` / `--obs-port` / `--obs-max-feeds` / `--obs-grid` | OBS | off / 0.0.0.0 / 9000 / 16 / off |
 | `--video-limit`, `--video-height`, `--pin NAME` (repeatable), `--pin-height` | Selection | 9, 180, —, 720 |
+| `--video-budget` | Selection.Budget, e.g. `3M`, `800k` (bits/s) | none |
 | `--ffmpeg`, `--ffplay` | executables | PATH |
 | `--log-level` | debug/info/warn | info |
 

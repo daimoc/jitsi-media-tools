@@ -280,6 +280,9 @@ func (p *pipe) push(pkt *rtp.Packet) {
 		p.stopLocked() // Nothing consumes it (any more)
 		return
 	}
+	if p.dec != nil && p.t.Kind == peer.KindVideo && p.dec.Height() != p.height() {
+		p.stopLocked() // Pinned or unpinned, or new heights: restart at the new height
+	}
 	if p.dec == nil {
 		if now.Sub(p.failed) < restartDelay || !p.startLocked() {
 			return
@@ -301,10 +304,7 @@ func (p *pipe) startLocked() bool {
 		err error
 	)
 	if p.t.Kind == peer.KindVideo {
-		cfg.Height = s.cfg.Selection.Height
-		if part := s.reg.get(p.owner); part != nil && part.Pinned {
-			cfg.Height = s.cfg.Selection.PinHeight
-		}
+		cfg.Height = p.height()
 		dec, err = ffmpeg.StartVideoDecoder(s.ctx, cfg)
 	} else {
 		dec, err = ffmpeg.StartAudioDecoder(s.ctx, cfg)
@@ -329,6 +329,19 @@ func (p *pipe) startLocked() bool {
 		p.consume(dec)
 	}()
 	return true
+}
+
+// height is the decoded height of the owner's video: the pinned height
+// for a pinned participant, else the selection's height.
+func (p *pipe) height() int {
+	s := p.r.m.s
+	s.mu.Lock()
+	sel := s.cfg.Selection
+	s.mu.Unlock()
+	if part := s.reg.get(p.owner); part != nil && part.Pinned {
+		return sel.PinHeight
+	}
+	return sel.Height
 }
 
 // consume moves decoded frames into the room until the decoder ends.

@@ -43,6 +43,7 @@ type Selection struct {
     Height    int      // 180 (default), 360, 720
     Pins      []string // display names
     PinHeight int      // default 720
+    Budget    int      // received video, bits/s; 0 = none, else ≥ 100000 (FR-033)
 }
 
 type DisplayOptions struct{ Title string }
