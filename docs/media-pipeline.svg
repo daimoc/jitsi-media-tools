@@ -146,10 +146,10 @@
   <text class="s" x="490" y="515">.mkv per participant</text>
   <text class="s" x="490" y="531">or mixed (planned)</text>
 
-  <rect class="box planned" x="590" y="472" width="180" height="70" rx="6"/>
+  <rect class="box" x="590" y="472" width="180" height="70" rx="6"/>
   <text class="t" x="680" y="496">SRT feeds</text>
   <text class="s" x="680" y="515">for OBS Media Sources</text>
-  <text class="s" x="680" y="531">(planned)</text>
+  <text class="s" x="680" y="531">(--obs, --obs-grid)</text>
 
   <!-- Legend -->
   <path class="media" d="M22,580 H62" marker-end="url(#a)"/>

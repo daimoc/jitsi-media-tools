@@ -133,7 +133,7 @@ Phase 6b; the SRT/RTMP input of T049 was dropped on 2026-10-27, research R14.)
 - [X] T048 [P] [US4] Test `internal/ffmpeg/srt_test.go` (needs ffmpeg with srt): an output to `srt://127.0.0.1:P?mode=listener` is readable by a second ffmpeg caller; when the caller leaves, the supervised output restarts and accepts a new caller
 - ~~T049~~ dropped (2026-10-27): OBS comes in through the WHIP gateway, Phase 6b
 - [X] T050 [US4] Implement `internal/output/feeds.go`: per participant feed = constant-rate tile stream (latest frame repeated, name card when no video, silence when no audio) at 1280x720 (pinned high-res) or 640x360, encoded `-c:v libx264 -preset veryfast -tune zerolatency -g 60 -c:a aac -f mpegts srt://HOST:PORT?mode=listener&latency=120000`, supervised (T012), fed through drop-oldest queues; grid feed from the compositor when `Grid`; `FeedReady` events and stdout lines `feed NAME srt://host:port` (FR-017, FR-018)
-- [ ] T051 [US4] `jmt.Options.OBS`, `Session.FeedURLs()`, CLI `--obs --obs-host --obs-port --obs-max-feeds --obs-grid`; live test `tests/live/obs_test.go` reading a participant feed with ffmpeg as SRT caller; hand check quickstart scenario 5 with OBS; commit
+- [X] T051 [US4] `jmt.Options.OBS`, `Session.FeedURLs()`, CLI `--obs --obs-host --obs-port --obs-max-feeds --obs-grid`; live test `tests/live/obs_test.go` reading a participant feed with ffmpeg as SRT caller; hand check quickstart scenario 5 with OBS; commit — done 2026-10-28 but the hand check with OBS itself (the live test reads the feed with ffmpeg)
 
 ---
 

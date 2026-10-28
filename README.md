@@ -58,7 +58,7 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | Stream OBS into meetings: WHIP gateway (`serve`) | Done |
 | Tile-grid window (`--display`) | Done |
 | Recording (`--record`) | Not yet |
-| SRT feeds for OBS (`--obs`, `--obs-grid`) | Not yet |
+| SRT feeds for OBS (`--obs`, `--obs-grid`) | Done |
 | Decoded frames and samples in the library | Done |
 
 The flags for the unfinished features are already parsed, but they do nothing yet.
@@ -137,10 +137,40 @@ What the tool can do with received media:
 | Tile-grid window and mixed audio | `--display` (needs ffplay) | Done |
 | Decoded frames and samples, per participant, the grid and the mix | Library callbacks: `OnVideo`, `OnAudio`, `OnGrid`, `OnMixedAudio` | Done |
 | Recording: one `.mkv` per participant, or one mixed file | `--record DIR --record-mode per-participant\|mixed` | Not yet |
-| SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-port`, `--obs-max-feeds` | Not yet |
+| SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-port`, `--obs-max-feeds` | Done |
 
-Received media is decoded only while an output uses it. Without `--display`, the command
-line only publishes and prints who joins and leaves.
+Received media is decoded only while an output uses it. Without `--display` or `--obs`, the
+command line only publishes and prints who joins and leaves.
+
+### Bring the meeting into OBS (SRT feeds)
+
+```bash
+jitsi-media-tools join --url https://meet.example.org/MyRoom --name Feeds --obs --obs-grid
+```
+
+The command prints one address per feed:
+
+```text
+feed grid srt://192.0.2.10:9000
++ Alice
+feed Alice srt://192.0.2.10:9001
+```
+
+In OBS, add a **Media Source**, untick "Local file", and set **Input** to the address, for
+example `srt://192.0.2.10:9001`.
+
+- **Which feeds:** each participant whose video the tool has received gets a feed, at most
+  `--obs-max-feeds` (16 by default). `--obs-grid` adds the whole tile grid with the mixed
+  audio.
+- **What a feed carries:** the participant's video and their own audio. A feed is 640x360,
+  or 1280x720 for a participant pinned with `--pin`; the grid is 1280x720. The video and
+  audio are H.264 and AAC in MPEG-TS over SRT, with 120 ms of SRT latency.
+- **Addresses stay the same.** A participant keeps their address for the whole session, so
+  OBS scenes keep working. While they are away, or without video, their feed shows their
+  name card.
+- **CPU:** a feed only encodes while OBS is connected to it.
+- **Ports:** the grid is on `--obs-port` (9000 by default) and participants on the next
+  ports, all UDP. `--obs-host` sets the address to listen on (every interface by default).
 
 ### Stream OBS into a meeting (WHIP gateway)
 

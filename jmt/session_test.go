@@ -2,6 +2,7 @@ package jmt
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
 	"github.com/daimoc/jitsi-media-tools/internal/session"
 	"github.com/daimoc/jitsi-media-tools/internal/session/sessiontest"
 	"github.com/daimoc/jitsi-media-tools/internal/signaling"
@@ -211,5 +213,43 @@ func TestSession_FrameStableDuringCallback(t *testing.T) {
 	defer mu.Unlock()
 	if changed > 0 {
 		t.Errorf("%d of %d frames changed during the callback", changed, checked)
+	}
+}
+
+// TestJoin_OBSFeeds checks T051: with OBS options, Alice's feed and the
+// grid's are announced as events and listed by FeedURLs.
+func TestJoin_OBSFeeds(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	caps, err := ffmpeg.Probe(context.Background(), bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caps.Missing(ffmpeg.NeedSRT, ffmpeg.NeedH264Encoder, ffmpeg.NeedAACEncoder); err != nil {
+		t.Skip(err)
+	}
+	fakeRoom(t, true)
+	base := 31000 + int(time.Now().UnixNano()%2000)*4
+	s, err := Join(context.Background(), Options{MeetingURL: "https://meet.test/Room", DisplayName: "Lib", Logger: quiet,
+		OBS: &OBSOptions{Host: "127.0.0.1", BasePort: base, MaxFeeds: 2, Grid: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	feeds := map[string]string{}
+	for deadline := time.Now().Add(10 * time.Second); len(feeds) < 2 && time.Now().Before(deadline); {
+		select {
+		case e := <-s.Events():
+			if e.Kind == FeedReady {
+				feeds[e.Participant.Name] = e.FeedURL
+			}
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	grid, alice := fmt.Sprintf("srt://127.0.0.1:%d", base), fmt.Sprintf("srt://127.0.0.1:%d", base+1)
+	if feeds[""] != grid || feeds["Alice"] != alice {
+		t.Fatalf("feed events %v, want the grid on %s and Alice on %s", feeds, grid, alice)
+	}
+	if urls := s.FeedURLs(); urls[""] != grid || urls["Alice"] != alice {
+		t.Errorf("FeedURLs() = %v", urls)
 	}
 }
