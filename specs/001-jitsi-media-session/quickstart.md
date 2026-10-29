@@ -28,9 +28,10 @@ Let `R=https://localhost:8443/IntriguingClimatesSupposeProbably` and
 2. **Display** (US2): `$jmt join --url $R --insecure --name Viewer --display`
    → a window with the browser participants as named tiles, their audio audible; joining
    another browser tab adds a tile within 5 s.
-3. **Library** (US3): `go run ./jmt/example_test.go`-style example (`go test -run Example ./jmt`
-   with `JMT_URL` set) prints participants and frame counts, and the browser shows its test
-   pattern.
+3. **Library** (US3): copy `ExampleJoin` from `jmt/example_test.go` into a `main` package
+   (add `Insecure: true` for the local server) and run it with `JMT_URL=$R` → it prints each
+   participant's frame count after 10 s, and the browser shows its moving pattern. (`go test`
+   compiles the example but does not run it: it has no `// Output:`.)
 4. **Guest / token** (US5): join a real deployment as guest with only its URL; join a
    token-auth server with `--jwt` or `--jwt-app-id` + `JITSI_APP_SECRET`; a wrong token exits 1
    with "authentication failed".

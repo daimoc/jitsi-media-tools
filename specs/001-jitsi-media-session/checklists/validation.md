@@ -183,3 +183,32 @@ Found and fixed during the check:
 - With a 2.4M budget the level climbed twice in 2 s and overshot (6 videos, 2.47 Mbps),
   then came back down: the window after a move still measured the old videos. Windows are
   now ignored for 5 s after each move.
+
+## Quickstart end to end (T069, T070)
+
+2026-10-29, local Jitsi, ffmpeg n8.1.3. Headless: a looping "Clip" publisher, checked by a
+second participant rather than a browser.
+
+- [x] `go vet ./... && go test -race ./...` green; live tests 6/6 pass (latency: video
+  62–87 ms, audio 87–95 ms to the callbacks over three runs).
+- [x] `go build`, `go vet` and every test package compile for Windows and macOS (amd64 and
+  arm64).
+- [ ] CI on Linux, macOS and Windows (SC-007): not run, the repository has no remote yet.
+- [x] Scenario 1: "Clip" published and recorded by a second participant (58.6 s, 640x360,
+  H.264 and AAC); Ctrl+C ends it with code 0 in under 0.1 s.
+- [x] Scenario 3: the example program printed `Clip: 285 frames` after 10 s. The quickstart
+  said to run it with `go test -run Example`, which only compiles it; corrected.
+- [x] Scenario 6: per-participant and mixed recordings, 60 s each, decode without errors;
+  Ctrl+C exits 0 and both files play.
+- [x] Scenario 10: no ffmpeg or ffplay left after any run. Edge-case and exit tests (T066)
+  cover Ctrl+C, SIGKILL and a lost connection automatically.
+- [ ] Not run again today, need a person: the browser view (1, 2), OBS Media Sources (5) and
+  WHIP in real OBS (9), VLC playback (6), a token server and a wrong token (4). Scenarios 7
+  and 8 were checked on 2026-10-28 (above).
+
+Found and fixed during the run (092e143):
+
+- The mixed recording's frames were 21–48 ms apart, and ffmpeg guessed 179/6 fps and warned
+  of repeated timestamps when transcoding it. Frames were stamped when queued, after drawing,
+  so drawing time became jitter. They now carry their clock tick's time: 33–34 ms apart,
+  30/1 fps, in both kinds of file.
