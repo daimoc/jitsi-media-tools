@@ -94,6 +94,9 @@ func (s *SignalingClient) HandleSessionInitiate(fromJID string, jingle *JingleIQ
 	// is acknowledged and declined, and the client falls back to the bridge.
 	if !strings.EqualFold(fromJID, s.roomJID()+"/focus") {
 		s.logger.Info("Declining session-initiate not sent by the focus", slog.String("sid", jingle.SID), slog.String("from", fromJID))
+		s.mu.Lock()
+		s.declined[jingle.SID] = true
+		s.mu.Unlock()
 		s.wg.Add(1)
 		go func() {
 			defer s.wg.Done()
@@ -516,8 +519,14 @@ func (s *SignalingClient) HandleTransportInfo(fromJID string, jingle *JingleIQ) 
 
 	s.mu.RLock()
 	_, exists := s.sessions[jingle.SID]
+	declined := s.declined[jingle.SID]
 	handler := s.handler
 	s.mu.RUnlock()
+	if declined {
+		// The peer trickles candidates before it sees the decline.
+		s.logger.Debug("Ignoring transport-info of a declined session", slog.String("sid", jingle.SID))
+		return nil
+	}
 	if !exists {
 		return fmt.Errorf("unknown session: %s", jingle.SID)
 	}

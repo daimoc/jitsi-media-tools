@@ -578,6 +578,17 @@ func TestAdapter_DeclinesP2PSessionInitiate(t *testing.T) {
 	if h.pc.RemoteDescription() != nil {
 		t.Error("the P2P offer must not reach the media side")
 	}
+
+	// The participant may already be trickling candidates for it: they are
+	// acknowledged, not rejected as an unknown session.
+	c.send(`<iq xmlns="jabber:client" type="set" id="p2p2" from="` + participant + `" to="` + c.jid + `">` +
+		`<jingle xmlns="urn:xmpp:jingle:1" action="transport-info" sid="7fq3m0b9ai2v8">` +
+		`<content creator="initiator" name="0"><transport xmlns="urn:xmpp:jingle:transports:ice-udp:1" ufrag="u" pwd="p">` +
+		`<candidate component="1" foundation="1" generation="0" id="c1" ip="192.0.2.7" network="0" port="50000" priority="1" protocol="udp" type="host"/>` +
+		`</transport></content></jingle></iq>`)
+	if reply := c.expect("transport-info reply", func(e element) bool { return e.attr("id") == "p2p2" }); reply.attr("type") != "result" {
+		t.Errorf("transport-info of the declined session: got %s, want a result", reply)
+	}
 }
 
 func TestAdapter_RejectsInvalidSessionInitiate(t *testing.T) {

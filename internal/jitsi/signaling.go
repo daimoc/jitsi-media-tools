@@ -104,6 +104,7 @@ type SignalingClient struct {
 
 	mu       sync.RWMutex
 	sessions map[string]*JingleSession  // Guarded by mu
+	declined map[string]bool            // Peer-to-peer session IDs declined; guarded by mu
 	handler  signaling.SignalingHandler // Guarded by mu
 	policy   *signaling.ReceivePolicy   // Guarded by mu; nil: default
 
@@ -121,6 +122,7 @@ func NewSignalingClient(logger *slog.Logger, config JingleConfig) *SignalingClie
 		joinDone:    make(chan struct{}),
 		noHost:      make(chan struct{}, 1),
 		sessions:    make(map[string]*JingleSession),
+		declined:    make(map[string]bool),
 		closedCtx:   closedCtx,
 		closeCancel: closeCancel,
 	}
