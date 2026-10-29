@@ -216,7 +216,7 @@ H.264 and Opus forwarded unchanged (research R14).
 
 - [X] T066 [P] Edge cases from spec.md, tests first, in `internal/session/edge_test.go`: duplicate names, audio-only/video-only participants, undecodable codec → name card + one warning, lost connection → exit 1, no leftover processes after `Close`, kill and Ctrl+C (SC-008) — exits in `jmt/exit_test.go` (the CLI's tests may only import `jmt`); kill and Ctrl+C run on Linux and macOS, Windows relies on its Job Object
 - [X] T067 [P] `README.md`: install (ffmpeg per OS), CLI examples for each scenario, OBS setup (stream to SRT/RTMP, Media Source on feed URLs), library example, limits
-- [ ] T068 [P] Update `CLAUDE.md` commands and recent changes
+- [X] T068 [P] Update `CLAUDE.md` commands and recent changes
 - [ ] T069 Full `go vet ./... && go test -race ./...` locally; live tests against local Jitsi; CI green on Linux, macOS and Windows (SC-007)
 - [ ] T070 Run quickstart.md end to end; final commit
 

@@ -1,6 +1,6 @@
 # jitsi-media-tools Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-10-24
+Auto-generated from all feature plans. Last updated: 2026-10-29
 
 ## Development workflow
 
@@ -39,15 +39,20 @@ go run ./tests/displaycheck --url https://localhost:8443/jmt-display --insecure 
 WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure   # WHIP gateway; OBS server http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Rec --record /tmp/rec   # --record-mode mixed
 go run ./cmd/jitsi-media-tools devices && go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Cam --publish device:/dev/video0,default
+go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Viewer --display --pin Alice --video-budget 3M
 ```
 
 ## Code Style
 
 Standard Go conventions. Signaling packages (`internal/jitsi`, `internal/signaling`) never
-import media packages and vice versa; `internal/session` is the only glue.
+import media packages and vice versa; `internal/session` is the only glue. `cmd/` imports only
+`jmt`, its tests included (`internal/boundary_test.go`): tests that need the fake server
+(`internal/session/sessiontest`) go in `jmt` or `internal/session`.
 
 ## Recent Changes
 
+- 001-jitsi-media-session: edge cases and exits (T066): `internal/session/edge_test.go`,
+  `jmt/exit_test.go` (Ctrl+C and SIGKILL of a recording session leave no ffmpeg)
 - 001-jitsi-media-session: received-video budget (FR-033, R8): `internal/session/budget.go`,
   `--video-budget`; `assumedBandwidthBps` offered to the bridge
 - 001-jitsi-media-session: camera and microphone (US7): `jmt.DeviceSource`, names resolved
