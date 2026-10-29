@@ -70,7 +70,8 @@ out of scope and what was not tested.
 - Go 1.23 or newer, to build.
 - ffmpeg 6 or newer, built with libvpx, libopus, libx264 and libsrt, plus ffplay for the
   window. The WHIP gateway (`serve`) needs no ffmpeg.
-- Docker, only for the local test server.
+- Docker, for the local test server, or to run the tool in a container instead of
+  installing ffmpeg.
 
 ## Install
 
@@ -93,6 +94,46 @@ out of scope and what was not tested.
    source scripts/env.sh         # puts .tools/ffmpeg/bin (and /usr/local/go/bin) in PATH
    go build -o jitsi-media-tools ./cmd/jitsi-media-tools
    ```
+
+### Or run it in Docker
+
+The image holds the tool and the pinned ffmpeg build, for linux/amd64 and linux/arm64. It
+has no ffplay and no shell, so `--display` is not available; everything else is.
+
+```bash
+docker build -t jitsi-media-tools .
+# Every platform at once, without emulation:
+#   docker buildx build --platform linux/amd64,linux/arm64 -t <registry>/jitsi-media-tools --push .
+
+docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD/rec:/rec" \
+  jitsi-media-tools join --url https://meet.example.org/MyRoom --name Recorder --record /rec
+docker run --rm --network host -v "$PWD/samples:/media:ro" \
+  jitsi-media-tools join --url https://meet.example.org/MyRoom --name Clip --publish file-loop:/media/clip.mp4
+```
+
+- **Network.** On Linux, `--network host` is the simplest: WebRTC, the SRT feeds and the
+  WHIP gateway use the host's addresses as they would without Docker. On Docker's default
+  bridge network, joining a meeting normally works, through Docker's NAT. Two things need extra
+  flags there:
+  - **SRT feeds:** publish the ports and name the host in the feed URLs, for example
+    `-p 9000-9016:9000-9016/udp … --obs --obs-url-host 192.168.1.20`.
+  - **WHIP gateway:** publish its two ports and give the host's address with `--public-ip`.
+    `compose.yaml` does this:
+
+    ```bash
+    WHIP_API_SECRET=change-me JMT_PUBLIC_IP=192.168.1.20 docker compose up -d
+    ```
+
+    `JMT_WHIP_PORT` changes the HTTP port on the host (8080 by default).
+- **Files.** The image runs as an unprivileged user. Use `--user` so that recordings in a
+  mounted directory belong to you, and mount the files you publish.
+- **Stopping.** `docker stop` ends the session as Ctrl+C does: the tool leaves the meeting,
+  closes its recordings and exits with code 0.
+- **A Jitsi in Docker on the same machine.** From a container on another bridge network, the
+  Videobridge's container address is unreachable. Use `--network host`, attach the
+  container to Jitsi's network as well, or set the bridge's `JVB_ADVERTISE_IPS` to the
+  host's address.
+- Cameras and microphones in a container were not tried.
 
 ## Command-line usage
 
@@ -168,7 +209,7 @@ What the tool can do with received media:
 | Tile-grid window and mixed audio | `--display` (needs ffplay) | Done |
 | Decoded frames and samples, per participant, the grid and the mix | Library callbacks: `OnVideo`, `OnAudio`, `OnGrid`, `OnMixedAudio` | Done |
 | Recording: one `.mkv` per participant, or one mixed file | `--record DIR --record-mode per-participant\|mixed` | Done |
-| SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-port`, `--obs-max-feeds` | Done |
+| SRT feeds of each participant, and of the grid, for OBS Media Sources | `--obs`, `--obs-grid`, `--obs-host`, `--obs-url-host`, `--obs-port`, `--obs-max-feeds` | Done |
 
 Received media is decoded only while an output uses it. Without `--display`, `--record` or `--obs`, the
 command line only publishes and prints who joins and leaves.
@@ -202,6 +243,8 @@ example `srt://192.0.2.10:9001`.
 - **CPU:** a feed only encodes while OBS is connected to it.
 - **Ports:** the grid is on `--obs-port` (9000 by default) and participants on the next
   ports, all UDP. `--obs-host` sets the address to listen on (every interface by default).
+  `--obs-url-host` sets the address in the feed URLs, for example the host's when the tool
+  runs in a container.
 
 ### Record the meeting
 
@@ -280,7 +323,8 @@ gateway serves several streams at once, into any Jitsi meetings.
 | `--max-streams` | 10 |
 | `--insecure`, `--wait-host`: for the meetings' servers | off, `30s` |
 
-On a public server, open the HTTP port (TCP) and the UDP port. The bearer token travels in
+On a public server, open the HTTP port (TCP) and the UDP port. To run the gateway in
+Docker, see [Or run it in Docker](#or-run-it-in-docker). The bearer token travels in
 every request, so use HTTPS across the internet. `serve` prints one line per stream: `+ OBS
 meet.example.org/MyRoom` when it starts, `-` when it ends, and `!` with the reason when it
 fails.

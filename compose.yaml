@@ -1,0 +1,20 @@
+# WHIP gateway for OBS (jitsi-media-tools serve) in Docker.
+#
+#   WHIP_API_SECRET=s3cret JMT_PUBLIC_IP=203.0.113.10 docker compose up -d
+#
+# OBS: Service "WHIP", Server http://<JMT_PUBLIC_IP>:${JMT_WHIP_PORT:-8080}/whip/<meet host>/<room>?name=OBS,
+# Bearer Token $WHIP_API_SECRET. JMT_PUBLIC_IP is the address OBS reaches this
+# host at: the media port is published from the container, so the gateway
+# cannot see it. On Linux, network_mode: host (instead of ports) also works
+# without it. The address serve prints names the container's port, 8080.
+services:
+  whip:
+    build: .
+    image: jitsi-media-tools
+    command: ["serve", "--public-ip", "${JMT_PUBLIC_IP:?set JMT_PUBLIC_IP to the address OBS reaches this host at}"]
+    environment:
+      WHIP_API_SECRET: ${WHIP_API_SECRET:?set WHIP_API_SECRET}
+    ports:
+      - "${JMT_WHIP_PORT:-8080}:8080" # WHIP (HTTP; --tls-cert/--tls-key for HTTPS)
+      - "8189:8189/udp"               # Media of every stream
+    restart: unless-stopped

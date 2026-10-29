@@ -6,6 +6,9 @@
 #
 #   ./scripts/get-ffmpeg.sh
 #   export PATH="$PWD/.tools/ffmpeg/bin:$PATH"   # or: source scripts/env.sh
+#
+# FFMPEG_ARCH (x86_64 or aarch64) picks another Linux machine's build, as the
+# Dockerfile does when it builds for another platform.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,7 +16,7 @@ TAG=autobuild-2026-09-30-13-08
 BUILD=ffmpeg-n8.1.3-9-g29e619e767
 DEST=.tools/ffmpeg
 
-case "$(uname -s)-$(uname -m)" in
+case "$(uname -s)-${FFMPEG_ARCH:-$(uname -m)}" in
     Linux-x86_64)  ASSET=$BUILD-linux64-gpl-8.1.tar.xz;    SHA=97ce978979194b5cf7e06a5e68020dbdaa7a4f3294c5452b6a1bc347100dbb79 ;;
     Linux-aarch64) ASSET=$BUILD-linuxarm64-gpl-8.1.tar.xz; SHA=10523d1e0be6b3ce62a9708cc50815c4b5eb5f36ae147fbe2afeecda6f2d6845 ;;
     MINGW*-x86_64|MSYS*-x86_64|CYGWIN*-x86_64)

@@ -40,6 +40,8 @@ WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure   # WHIP 
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Rec --record /tmp/rec   # --record-mode mixed
 go run ./cmd/jitsi-media-tools devices && go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Cam --publish device:/dev/video0,default
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Viewer --display --pin Alice --video-budget 3M
+docker build -t jitsi-media-tools .     # distroless image, tool + pinned ffmpeg; buildx cross-builds arm64 without emulation
+WHIP_API_SECRET=s3cret JMT_PUBLIC_IP=<host IP> docker compose up -d   # WHIP gateway in a container (compose.yaml)
 ```
 
 ## Code Style
@@ -51,6 +53,9 @@ import media packages and vice versa; `internal/session` is the only glue. `cmd/
 
 ## Recent Changes
 
+- 001-jitsi-media-session: Docker image (`Dockerfile`, `compose.yaml`); `--obs-url-host`; the
+  WHIP mux with `--public-ip` is one socket on every interface (Pion ties a 1:1 public
+  candidate to the first socket only)
 - 001-jitsi-media-session: edge cases and exits (T066): `internal/session/edge_test.go`,
   `jmt/exit_test.go` (Ctrl+C and SIGKILL of a recording session leave no ffmpeg)
 - 001-jitsi-media-session: received-video budget (FR-033, R8): `internal/session/budget.go`,

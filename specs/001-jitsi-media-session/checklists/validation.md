@@ -212,3 +212,27 @@ Found and fixed during the run (092e143):
   of repeated timestamps when transcoding it. Frames were stamped when queued, after drawing,
   so drawing time became jitter. They now carry their clock tick's time: 33–34 ms apart,
   30/1 fps, in both kinds of file.
+
+## Docker image (T071), 2026-10-29
+
+Image `jitsi-media-tools` (297 MB) against the local Jitsi; publisher ffmpeg 8.1 `-f whip`
+on the host stands in for OBS.
+
+- [x] `--network host`: one container publishes `file-loop:` the sample clip, another
+  records it (13.8 s, H.264 and AAC, decodes without errors). `docker stop` ends both with
+  code 0 in 0.1–0.2 s; the recording is complete.
+- [x] `compose.yaml` (bridge network, published ports, `--public-ip`): the WHIP stream joins
+  and a recorder on the host gets it (12.9 s, 385 frames).
+- [x] Bridge network, `--obs --obs-grid --obs-url-host <host IP>`, ports 9000–9002
+  published: the feed URLs name the host, and the host's ffmpeg reads the participant feed
+  (640x360, 30 fps, audio).
+- [x] `docker buildx build --platform linux/arm64` on an amd64 machine without QEMU: arm64
+  binaries, and every library the arm64 ffmpeg needs is in the image. Not run on arm64.
+- The local Jitsi advertises only its container address (no `JVB_ADVERTISE_IPS`), which a
+  container on another bridge network cannot reach; the bridge tests attached the
+  container to Jitsi's network as well, and pointed `localhost` at the host.
+
+Found and fixed (334ef68): with `--public-ip`, the gateway answered no WHIP publisher whose
+packets arrived on an interface other than the first one listened on (loopback), so on a
+NATed server or in a container the DTLS handshake timed out. Running natively on the host
+it failed too as soon as `--public-ip` was set.

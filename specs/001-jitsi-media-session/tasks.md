@@ -219,6 +219,7 @@ H.264 and Opus forwarded unchanged (research R14).
 - [X] T068 [P] Update `CLAUDE.md` commands and recent changes
 - [ ] T069 Full `go vet ./... && go test -race ./...` locally; live tests against local Jitsi; CI green on Linux, macOS and Windows (SC-007) — local runs green 2026-10-29 and cross-builds for Windows and macOS; CI waits for a remote
 - [ ] T070 Run quickstart.md end to end; final commit — headless parts run 2026-10-29 (checklists/validation.md); browser, OBS, VLC and token checks left
+- [X] T071 [P] Docker image: `Dockerfile` (distroless, pinned ffmpeg, linux/amd64 and arm64 without emulation), `.dockerignore`, `compose.yaml` for `serve`; `--obs-url-host` for feed URLs from a container; `--public-ip` fixed for a gateway whose public address is not its first interface's
 
 ---
 

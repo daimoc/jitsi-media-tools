@@ -1,0 +1,13 @@
+.git
+.tools
+.specify
+.claude
+specs
+docs
+tests/platforms
+recordings
+jitsi-media-tools
+*.mkv
+*.test
+*.out
+samples
