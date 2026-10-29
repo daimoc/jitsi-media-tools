@@ -29,8 +29,9 @@ type Sender struct {
 	stopOnce sync.Once
 	// Errors gets reading failures of the encoded media.
 	Errors chan error
-	// AudioOnly sends no video; set it before the session starts.
-	AudioOnly bool
+	// AudioOnly sends no video, VideoOnly no audio; set them before the
+	// session starts.
+	AudioOnly, VideoOnly bool
 }
 
 // NewSender encodes the media and makes f's bridge send it for owner.
@@ -54,18 +55,19 @@ func NewSender(f *Signal, owner string) *Sender {
 
 func (b *Sender) setup(bridge *webrtc.PeerConnection) {
 	t := b.f.T
-	a, err := webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "audio", b.owner)
-	if err != nil {
-		t.Fatal(err)
+	b.f.Sources = nil
+	var a, v *webrtc.TrackLocalStaticSample
+	var err error
+	if !b.VideoOnly {
+		if a, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2}, "audio", b.owner); err != nil {
+			t.Fatal(err)
+		}
+		as, err := bridge.AddTrack(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b.f.Sources = append(b.f.Sources, signaling.RemoteSource{SSRC: uint32(as.GetParameters().Encodings[0].SSRC), Kind: "audio", Name: b.owner + "-a0", Owner: b.owner})
 	}
-	as, err := bridge.AddTrack(a)
-	if err != nil {
-		t.Fatal(err)
-	}
-	b.f.Sources = []signaling.RemoteSource{
-		{SSRC: uint32(as.GetParameters().Encodings[0].SSRC), Kind: "audio", Name: b.owner + "-a0", Owner: b.owner},
-	}
-	var v *webrtc.TrackLocalStaticSample
 	if !b.AudioOnly {
 		if v, err = webrtc.NewTrackLocalStaticSample(webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeVP8}, "video", b.owner); err != nil {
 			t.Fatal(err)
@@ -83,7 +85,9 @@ func (b *Sender) setup(bridge *webrtc.PeerConnection) {
 				if v != nil {
 					go b.sendVideo(v)
 				}
-				go b.sendAudio(a)
+				if a != nil {
+					go b.sendAudio(a)
+				}
 			})
 		}
 	})
