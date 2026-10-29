@@ -217,7 +217,7 @@ H.264 and Opus forwarded unchanged (research R14).
 - [X] T066 [P] Edge cases from spec.md, tests first, in `internal/session/edge_test.go`: duplicate names, audio-only/video-only participants, undecodable codec → name card + one warning, lost connection → exit 1, no leftover processes after `Close`, kill and Ctrl+C (SC-008) — exits in `jmt/exit_test.go` (the CLI's tests may only import `jmt`); kill and Ctrl+C run on Linux and macOS, Windows relies on its Job Object
 - [X] T067 [P] `README.md`: install (ffmpeg per OS), CLI examples for each scenario, OBS setup (stream to SRT/RTMP, Media Source on feed URLs), library example, limits
 - [X] T068 [P] Update `CLAUDE.md` commands and recent changes
-- [ ] T069 Full `go vet ./... && go test -race ./...` locally; live tests against local Jitsi; CI green on Linux, macOS and Windows (SC-007) — local runs green 2026-10-29 and cross-builds for Windows and macOS; CI waits for a remote
+- [X] T069 Full `go vet ./... && go test -race ./...` locally; live tests against local Jitsi; CI green on Linux, macOS and Windows (SC-007) — `.github/workflows/ci.yml` green 2026-10-29 (run 40914426632): the three systems, Go 1.23, live tests
 - [ ] T070 Run quickstart.md end to end; final commit — headless parts run 2026-10-29 (checklists/validation.md); browser, OBS, VLC and token checks left
 - [X] T071 [P] Docker image: `Dockerfile` (distroless, pinned ffmpeg, linux/amd64 and arm64 without emulation), `.dockerignore`, `compose.yaml` for `serve`; `--obs-url-host` for feed URLs from a container; `--public-ip` fixed for a gateway whose public address is not its first interface's
 

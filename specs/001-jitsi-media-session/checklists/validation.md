@@ -193,7 +193,11 @@ second participant rather than a browser.
   62–87 ms, audio 87–95 ms to the callbacks over three runs).
 - [x] `go build`, `go vet` and every test package compile for Windows and macOS (amd64 and
   arm64).
-- [ ] CI on Linux, macOS and Windows (SC-007): not run, the repository has no remote yet.
+- [x] CI on Linux, macOS and Windows (SC-007): green on GitHub Actions (run 40914426632, commit
+  06dbf7c): `go vet` and `go test -race` on the three systems, a Go 1.23 build, and the live
+  tests against a local Jitsi on the runner. The first runs found that Windows CI could not
+  find ffmpeg, five tests that failed instead of skipping without ffmpeg, and a fake-server
+  race that failed one test about 1 run in 6; all fixed in 06dbf7c.
 - [x] Scenario 1: "Clip" published and recorded by a second participant (58.6 s, 640x360,
   H.264 and AAC); Ctrl+C ends it with code 0 in under 0.1 s.
 - [x] Scenario 3: the example program printed `Clip: 285 frames` after 10 s. The quickstart
