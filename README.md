@@ -21,10 +21,12 @@ any participants you pin by display name.
 
 ## How it works
 
-![Media pipeline: publish source, ffmpeg encoder, RTP sender and WebRTC peer out to the Jitsi
-Videobridge; received RTP through the frame assembler and one ffmpeg decoder per stream into
-the room's tile grid and audio mix, then to the window, library callbacks, recording and SRT
-feeds](docs/media-pipeline.svg)
+![Media pipeline: OBS through the WHIP gateway's ingest peer and forwarder straight to the
+WebRTC peer, without ffmpeg; publish source, ffmpeg encoder, RTP sender and WebRTC peer out to
+the Jitsi Videobridge; received RTP through the frame assembler and one ffmpeg decoder per
+stream into the room's tile grid and audio mix, then to the window, library callbacks,
+recording and SRT feeds. Boxes outlined in purple use the Pion libraries named in
+them](docs/media-pipeline.svg)
 
 - **Publish**: one ffmpeg process encodes the source to VP8 and Opus. Go reads the encoded
   frames, paces them in real time and sends them as RTP over a Pion WebRTC connection to the
