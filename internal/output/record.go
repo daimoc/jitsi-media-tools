@@ -126,13 +126,13 @@ func StartRecording(ctx context.Context, c RecordConfig) (*Recording, error) {
 	return r, nil
 }
 
-// WriteVideo queues a frame (Width×Height yuv420p) made now; the recording
+// WriteVideo queues a frame (Width×Height yuv420p) made at made; the recording
 // keeps b.
-func (r *Recording) WriteVideo(b []byte) { r.queue.pushVideo(b) }
+func (r *Recording) WriteVideo(b []byte, made time.Time) { r.queue.pushVideo(b, made) }
 
-// WriteAudio queues a 20 ms chunk (s16le 48 kHz stereo) made now; the
+// WriteAudio queues a 20 ms chunk (s16le 48 kHz stereo) made at made; the
 // recording keeps b.
-func (r *Recording) WriteAudio(b []byte) { r.queue.pushAudio(b) }
+func (r *Recording) WriteAudio(b []byte, made time.Time) { r.queue.pushAudio(b, made) }
 
 // Stop writes what is queued, finishes the file and returns once ffmpeg
 // has exited.

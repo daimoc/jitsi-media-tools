@@ -64,9 +64,9 @@ func TestDisplay_WritesGridAndAudio(t *testing.T) {
 	}
 	start := time.Now()
 	for i := 0; i < 50; i++ { // 1 s: 50 audio chunks, 30 frames
-		d.WriteAudio(chunk)
+		d.WriteAudio(chunk, time.Now())
 		if i%5 < 3 {
-			d.WriteVideo(frame)
+			d.WriteVideo(frame, time.Now())
 		}
 		time.Sleep(time.Until(start.Add(time.Duration(i+1) * 20 * time.Millisecond)))
 	}
@@ -144,13 +144,13 @@ func TestDisplay_NoDelay(t *testing.T) {
 		start, f := time.Now(), 0
 		for i := 0; f < n; i++ { // 20 ms ticks
 			if i >= 10 { // Audio starts 200 ms after video
-				d.WriteAudio(chunk)
+				d.WriteAudio(chunk, time.Now())
 			}
 			if i%5 < 3 { // 30 fps
 				frame := make([]byte, w*h*3/2)
 				binary.LittleEndian.PutUint32(frame, uint32(f)) // Frame number in the first pixels
 				sent[f].Store(time.Now().UnixNano())
-				d.WriteVideo(frame)
+				d.WriteVideo(frame, time.Now())
 				f++
 			}
 			time.Sleep(time.Until(start.Add(time.Duration(i+1) * 20 * time.Millisecond)))

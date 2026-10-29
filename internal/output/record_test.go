@@ -85,9 +85,9 @@ func record(t *testing.T, bin, path string, w, h int, d time.Duration) *Recordin
 		case <-end:
 			return r
 		case <-video.C:
-			r.WriteVideo(frame.Bytes(nil))
+			r.WriteVideo(frame.Bytes(nil), time.Now())
 		case <-audio.C:
-			r.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes))
+			r.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes), time.Now())
 		}
 	}
 }

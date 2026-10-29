@@ -91,9 +91,9 @@ func TestFeed_ServesOneCallerAfterAnother(t *testing.T) {
 			case <-stop:
 				return
 			case <-video.C:
-				f.WriteVideo(frame.Bytes(nil))
+				f.WriteVideo(frame.Bytes(nil), time.Now())
 			case <-audio.C:
-				f.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes))
+				f.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes), time.Now())
 			}
 		}
 	}()
@@ -117,7 +117,7 @@ func TestFeed_StopWhileWaiting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.WriteVideo(compose.NewFrame(320, 180).Bytes(nil))
+	f.WriteVideo(compose.NewFrame(320, 180).Bytes(nil), time.Now())
 	time.Sleep(500 * time.Millisecond) // ffmpeg is up and waiting
 	done := make(chan struct{})
 	go func() { f.Stop(); close(done) }()

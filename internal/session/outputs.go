@@ -221,14 +221,14 @@ func (o *outputs) sync(parts []Participant) {
 // wantsGrid reports whether a grid output needs the grid drawn.
 func (o *outputs) wantsGrid() bool { return o != nil && (o.grid != nil || o.mixed != nil) }
 
-// gridVideo writes a grid frame.
-func (o *outputs) gridVideo(g *compose.Frame) {
+// gridVideo writes the grid frame of the tick at now.
+func (o *outputs) gridVideo(g *compose.Frame, now time.Time) {
 	b := g.Bytes(make([]byte, 0, compose.Size(g.W, g.H)))
 	if o.grid != nil {
-		o.grid.WriteVideo(b)
+		o.grid.WriteVideo(b, now)
 	}
 	if o.mixed != nil {
-		o.mixed.WriteVideo(b) // Outputs only read b
+		o.mixed.WriteVideo(b, now) // Outputs only read b
 	}
 }
 
@@ -259,16 +259,17 @@ func (o *outputs) videoTick(now time.Time) {
 		o.r.room.DrawTile(d.frame, d.id, d.name, now)
 		b := d.frame.Bytes(make([]byte, 0, compose.Size(d.frame.W, d.frame.H)))
 		if d.feed != nil {
-			d.feed.WriteVideo(b)
+			d.feed.WriteVideo(b, now)
 		}
 		if d.rec != nil {
-			d.rec.WriteVideo(b)
+			d.rec.WriteVideo(b, now)
 		}
 	}
 }
 
-// audio writes a participant's 20 ms chunk to their outputs.
-func (o *outputs) audio(id string, chunk []int16) {
+// audio writes a participant's 20 ms chunk of the tick at now to their
+// outputs.
+func (o *outputs) audio(id string, chunk []int16, now time.Time) {
 	if o == nil || id == "" {
 		return
 	}
@@ -280,30 +281,30 @@ func (o *outputs) audio(id string, chunk []int16) {
 	}
 	for _, t := range o.byName {
 		if t.id == id {
-			t.write(b)
+			t.write(b, now)
 			t.heard = true
 		}
 	}
 }
 
-// write writes an audio chunk to the tile's outputs.
-func (t *tile) write(b []byte) {
+// write writes an audio chunk made at now to the tile's outputs.
+func (t *tile) write(b []byte, now time.Time) {
 	if t.feed != nil {
-		t.feed.WriteAudio(b)
+		t.feed.WriteAudio(b, now)
 	}
 	if t.rec != nil {
-		t.rec.WriteAudio(b)
+		t.rec.WriteAudio(b, now)
 	}
 }
 
-// audioTick completes a 20 ms tick: silence for the tiles that got no
-// audio, and the mix for the grid.
-func (o *outputs) audioTick(mix []int16) {
+// audioTick completes the 20 ms tick at now: silence for the tiles that
+// got no audio, and the mix for the grid.
+func (o *outputs) audioTick(mix []int16, now time.Time) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	for _, t := range o.byName {
 		if !t.heard {
-			t.write(make([]byte, len(mix)*2))
+			t.write(make([]byte, len(mix)*2), now)
 		}
 		t.heard = false
 	}
@@ -312,10 +313,10 @@ func (o *outputs) audioTick(mix []int16) {
 	}
 	b := pcmBytes(mix)
 	if o.grid != nil {
-		o.grid.WriteAudio(b)
+		o.grid.WriteAudio(b, now)
 	}
 	if o.mixed != nil {
-		o.mixed.WriteAudio(b)
+		o.mixed.WriteAudio(b, now)
 	}
 }
 

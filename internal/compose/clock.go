@@ -15,10 +15,11 @@ const (
 // ticks are skipped.
 const maxCatchUp = 5
 
-// Clock calls tick every interval until ctx ends. Ticks missed because a
-// tick was slow are run at once (up to maxCatchUp), so consumers that
-// assume a constant rate, like ffmpeg reading raw video at -r 30, stay in
-// time (research R10).
+// Clock calls tick every interval until ctx ends, with the tick's due time
+// rather than the moment it runs, so timestamped outputs get a regular rate.
+// Ticks missed because a tick was slow are run at once (up to maxCatchUp),
+// so consumers that assume a constant rate, like ffmpeg reading raw video at
+// -r 30, stay in time (research R10).
 func Clock(ctx context.Context, interval time.Duration, tick func(now time.Time)) {
 	start := time.Now()
 	t := time.NewTicker(interval)
@@ -37,7 +38,7 @@ func Clock(ctx context.Context, interval time.Duration, tick func(now time.Time)
 				if ctx.Err() != nil {
 					return
 				}
-				tick(now)
+				tick(start.Add(time.Duration(done+1) * interval))
 			}
 		}
 	}

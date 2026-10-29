@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 )
@@ -108,13 +109,13 @@ func (d *Display) write(ctx context.Context) {
 	}
 }
 
-// WriteVideo queues a grid frame (Width×Height yuv420p) made now; the
+// WriteVideo queues a grid frame (Width×Height yuv420p) made at made; the
 // display keeps b, so the caller must not reuse it.
-func (d *Display) WriteVideo(b []byte) { d.queue.pushVideo(b) }
+func (d *Display) WriteVideo(b []byte, made time.Time) { d.queue.pushVideo(b, made) }
 
-// WriteAudio queues a 20 ms mix chunk (s16le 48 kHz stereo) made now; the
+// WriteAudio queues a 20 ms mix chunk (s16le 48 kHz stereo) made at made; the
 // display keeps b.
-func (d *Display) WriteAudio(b []byte) { d.queue.pushAudio(b) }
+func (d *Display) WriteAudio(b []byte, made time.Time) { d.queue.pushAudio(b, made) }
 
 // Done is closed when the window has gone (closed by the user, or failed).
 func (d *Display) Done() <-chan struct{} { return d.done }

@@ -13,7 +13,7 @@ const (
 )
 
 // stampedQueue holds video frames and audio chunks for a NUT writer, each
-// stamped with the time it was written, and drops the oldest of a kind
+// stamped with the time it was made, and drops the oldest of a kind
 // when more than its depth wait: a slow reader stays late by at most that
 // much (docs/latency.md).
 type stampedQueue struct {
@@ -41,11 +41,13 @@ func newStampedQueue(videoDepth, audioDepth int) *stampedQueue {
 		ready: make(chan struct{}, 1), lastVideo: -1, lastAudio: -1}
 }
 
-// pushVideo queues a frame made now; the queue keeps b. A frame closer
-// than half a frame interval to the previous one (a clock catching up
-// after a stall) is dropped.
-func (q *stampedQueue) pushVideo(b []byte) {
-	at := time.Since(q.start)
+// stamp returns made as a time in the stream.
+func (q *stampedQueue) stamp(made time.Time) time.Duration { return max(made.Sub(q.start), 0) }
+
+// pushVideo queues a frame made at made; the queue keeps b. A frame closer
+// than half a frame interval to the previous one is dropped.
+func (q *stampedQueue) pushVideo(b []byte, made time.Time) {
+	at := q.stamp(made)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.closed || q.lastVideo >= 0 && at-q.lastVideo < streamFrame/2 {
@@ -55,11 +57,11 @@ func (q *stampedQueue) pushVideo(b []byte) {
 	q.pushLocked(stampedPacket{video: true, at: at, data: b})
 }
 
-// pushAudio queues a 20 ms chunk made now; the queue keeps b. Chunks
-// written back to back get consecutive times, as their samples play one
-// after the other.
-func (q *stampedQueue) pushAudio(b []byte) {
-	at := time.Since(q.start)
+// pushAudio queues a 20 ms chunk made at made; the queue keeps b. A chunk
+// made no later than the previous one gets the next time, as their samples
+// play one after the other.
+func (q *stampedQueue) pushAudio(b []byte, made time.Time) {
+	at := q.stamp(made)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.closed {

@@ -99,16 +99,25 @@ func TestClock_TicksAndCatchesUp(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 210*time.Millisecond)
 	defer cancel()
 	var n atomic.Int64
+	var times []time.Time
 	slow := true
-	Clock(ctx, 20*time.Millisecond, func(time.Time) {
+	Clock(ctx, 20*time.Millisecond, func(at time.Time) {
 		if slow { // One slow tick: the missed ones are caught up
 			slow = false
 			time.Sleep(70 * time.Millisecond)
 		}
+		times = append(times, at)
 		n.Add(1)
 	})
 	if got := n.Load(); got < 9 || got > 11 {
 		t.Errorf("%d ticks in 210 ms of 20 ms, want about 10", got)
+	}
+	// Each tick gets its own due time, caught-up ones too, so that
+	// timestamped outputs (recordings) get a regular frame rate.
+	for i := 1; i < len(times); i++ {
+		if d := times[i].Sub(times[i-1]); d != 20*time.Millisecond {
+			t.Errorf("tick %d %v after the previous one, want 20ms", i, d)
+		}
 	}
 }
 

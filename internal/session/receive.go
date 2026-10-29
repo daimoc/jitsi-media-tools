@@ -137,10 +137,10 @@ func (r *receiver) videoTick(now time.Time) {
 	}
 	g := r.room.VideoTick(now)
 	if r.out.wantsGrid() {
-		r.out.gridVideo(g)
+		r.out.gridVideo(g, now)
 	}
 	if r.display != nil {
-		r.display.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))))
+		r.display.WriteVideo(g.Bytes(make([]byte, 0, compose.Size(g.W, g.H))), now)
 	}
 	deliverVideo(&r.sinks.grid, "", g, now)
 }
@@ -150,15 +150,15 @@ func (r *receiver) audioTick(mix []int16, now time.Time) {
 	if r.sinks.audio.Load() != nil || r.out != nil {
 		each = func(id string, chunk []int16) {
 			deliverAudio(&r.sinks.audio, id, chunk, now)
-			r.out.audio(id, chunk)
+			r.out.audio(id, chunk, now)
 		}
 	}
 	r.room.AudioTick(mix, each)
 	if r.out != nil {
-		r.out.audioTick(mix)
+		r.out.audioTick(mix, now)
 	}
 	if r.display != nil {
-		r.display.WriteAudio(pcmBytes(mix))
+		r.display.WriteAudio(pcmBytes(mix), now)
 	}
 	deliverAudio(&r.sinks.mix, "", mix, now)
 }

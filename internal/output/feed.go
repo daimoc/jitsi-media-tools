@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
 )
@@ -110,13 +111,13 @@ func (f *Feed) run(ctx context.Context) (*ffmpeg.Process, error) {
 	return p, nil
 }
 
-// WriteVideo queues a tile frame (Width×Height yuv420p) made now; the feed
+// WriteVideo queues a tile frame (Width×Height yuv420p) made at made; the feed
 // keeps b.
-func (f *Feed) WriteVideo(b []byte) { f.queue.pushVideo(b) }
+func (f *Feed) WriteVideo(b []byte, made time.Time) { f.queue.pushVideo(b, made) }
 
-// WriteAudio queues a 20 ms chunk (s16le 48 kHz stereo) made now; the feed
+// WriteAudio queues a 20 ms chunk (s16le 48 kHz stereo) made at made; the feed
 // keeps b.
-func (f *Feed) WriteAudio(b []byte) { f.queue.pushAudio(b) }
+func (f *Feed) WriteAudio(b []byte, made time.Time) { f.queue.pushAudio(b, made) }
 
 // Stop ends the feed; it returns once its ffmpeg has exited.
 func (f *Feed) Stop() {
