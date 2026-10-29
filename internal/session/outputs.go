@@ -18,6 +18,7 @@ var feedNeeds = []string{ffmpeg.NeedSRT, ffmpeg.NeedH264Encoder, ffmpeg.NeedAACE
 // OBSOptions serves SRT feeds for OBS Media Sources (data-model "OBSFeeds").
 type OBSOptions struct {
 	Host     string // Address to listen on; default every interface
+	URLHost  string // Address in the feed URLs; default Host or the outbound one
 	BasePort int    // The grid's port, participants after it; default 9000
 	MaxFeeds int    // Participant feeds; default 16
 	Grid     bool   // Also serve the grid
@@ -79,7 +80,7 @@ func newOutputs(r *receiver, obs *OBSOptions, rec *RecordOptions) *outputs {
 		if c.MaxFeeds == 0 {
 			c.MaxFeeds = 16
 		}
-		o.obs, o.ports = &c, output.NewPorts(c.Host, c.BasePort, c.MaxFeeds)
+		o.obs, o.ports = &c, output.NewPorts(c.Host, c.BasePort, c.MaxFeeds, c.URLHost)
 	}
 	return o
 }

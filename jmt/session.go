@@ -73,7 +73,7 @@ func (o Options) sessionConfig() (session.Config, error) {
 		cfg.Record = &session.RecordOptions{Dir: o.Record.Dir, Mixed: o.Record.Mode == RecordMixed}
 	}
 	if o.OBS != nil {
-		cfg.OBS = &session.OBSOptions{Host: o.OBS.Host, BasePort: o.OBS.BasePort, MaxFeeds: o.OBS.MaxFeeds, Grid: o.OBS.Grid}
+		cfg.OBS = &session.OBSOptions{Host: o.OBS.Host, URLHost: o.OBS.URLHost, BasePort: o.OBS.BasePort, MaxFeeds: o.OBS.MaxFeeds, Grid: o.OBS.Grid}
 	}
 	return cfg, nil
 }

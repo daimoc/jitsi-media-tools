@@ -39,6 +39,7 @@ func parseJoin(args []string, getenv func(string) string, stderr io.Writer) (*jo
 		recordMode   string
 		obs, obsGrid bool
 		obsHost      string
+		obsURLHost   string
 		obsPort      int
 		obsMax       int
 		pins         stringList
@@ -66,6 +67,7 @@ func parseJoin(args []string, getenv func(string) string, stderr io.Writer) (*jo
 	fs.StringVar(&recordMode, "record-mode", "per-participant", "per-participant or mixed")
 	fs.BoolVar(&obs, "obs", false, "serve SRT feeds for OBS")
 	fs.StringVar(&obsHost, "obs-host", "0.0.0.0", "address the OBS feeds listen on")
+	fs.StringVar(&obsURLHost, "obs-url-host", "", "address in the feed URLs, e.g. the Docker host's (default the outbound one)")
 	fs.IntVar(&obsPort, "obs-port", 9000, "first OBS feed port (the grid)")
 	fs.IntVar(&obsMax, "obs-max-feeds", 16, "maximum participant feeds")
 	fs.BoolVar(&obsGrid, "obs-grid", false, "also serve the grid as a feed")
@@ -120,7 +122,7 @@ func parseJoin(args []string, getenv func(string) string, stderr io.Writer) (*jo
 		o.Record = &jmt.RecordOptions{Dir: recordDir, Mode: mode}
 	}
 	if obs || obsGrid {
-		o.OBS = &jmt.OBSOptions{Host: obsHost, BasePort: obsPort, MaxFeeds: obsMax, Grid: obsGrid}
+		o.OBS = &jmt.OBSOptions{Host: obsHost, URLHost: obsURLHost, BasePort: obsPort, MaxFeeds: obsMax, Grid: obsGrid}
 	}
 	return &f, nil
 }

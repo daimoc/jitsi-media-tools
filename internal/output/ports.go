@@ -30,10 +30,13 @@ type Ports struct {
 	names  map[int]string // Port -> name as first seen
 }
 
-// NewPorts assigns ports on listenHost from base. URLs use listenHost, or
-// this machine's outbound address when it listens on every interface.
-func NewPorts(listenHost string, base, max int) *Ports {
-	urlHost := listenHost
+// NewPorts assigns ports on listenHost from base. URLs use urlHost, else
+// listenHost, or this machine's outbound address when it listens on every
+// interface.
+func NewPorts(listenHost string, base, max int, urlHost string) *Ports {
+	if urlHost == "" {
+		urlHost = listenHost
+	}
 	if urlHost == "" || urlHost == "0.0.0.0" || urlHost == "::" {
 		urlHost = outboundIP()
 	}

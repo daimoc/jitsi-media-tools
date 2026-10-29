@@ -76,6 +76,7 @@ type RecordOptions struct {
 // (when Grid), participants on the following ports.
 type OBSOptions struct {
 	Host     string // Address to listen on; default "0.0.0.0"
+	URLHost  string // Address OBS reaches the feeds at (e.g. the host of a container); default Host, or this machine's outbound address
 	BasePort int    // Default 9000
 	MaxFeeds int    // Default 16
 	Grid     bool

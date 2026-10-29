@@ -9,7 +9,7 @@ import (
 )
 
 func TestPorts_AssignStableAndCapped(t *testing.T) {
-	p := NewPorts("127.0.0.1", 9000, 2)
+	p := NewPorts("127.0.0.1", 9000, 2, "")
 	if p.Grid() != 9000 {
 		t.Errorf("grid %d", p.Grid())
 	}
@@ -46,8 +46,20 @@ func TestPorts_AssignStableAndCapped(t *testing.T) {
 }
 
 func TestPorts_AnyInterfaceUsesAnAddress(t *testing.T) {
-	p := NewPorts("0.0.0.0", 9000, 1)
+	p := NewPorts("0.0.0.0", 9000, 1, "")
 	if u := p.URL(9000); strings.Contains(u, "0.0.0.0") {
 		t.Errorf("URL %s should name a reachable address", u)
+	}
+}
+
+// In a container the feeds listen on its own address, but OBS reaches them
+// at the host's.
+func TestPorts_URLHostOverrides(t *testing.T) {
+	p := NewPorts("0.0.0.0", 9000, 1, "192.168.1.20")
+	if u := p.URL(9000); u != "srt://192.168.1.20:9000" {
+		t.Errorf("URL %s, want srt://192.168.1.20:9000", u)
+	}
+	if u := p.ListenURL(9000); !strings.HasPrefix(u, "srt://0.0.0.0:9000?") {
+		t.Errorf("ListenURL %s should still listen on 0.0.0.0", u)
 	}
 }
