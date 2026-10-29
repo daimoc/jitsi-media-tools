@@ -57,13 +57,15 @@ func feedKbps(w, h int) int {
 }
 
 // FeedArgs returns the arguments of ffmpeg reading a w×h NUT tile stream
-// on stdin and serving it at listenURL.
+// on stdin and serving it at listenURL. The input is not analysed, so the
+// encoder is told the frame rate: without it, the zero-latency encoder
+// used about 3% of the bitrate (27 kbit/s of 1000, TestFeed_UsesItsBitrate).
 func FeedArgs(listenURL string, w, h int) []string {
 	kbps := strconv.Itoa(feedKbps(w, h)) + "k"
 	return []string{
 		"-hide_banner", "-loglevel", "error",
 		"-probesize", "32", "-analyzeduration", "0", "-f", "nut", "-i", "pipe:0",
-		"-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-pix_fmt", "yuv420p",
+		"-r", strconv.Itoa(int(time.Second / streamFrame)), "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "60", "-pix_fmt", "yuv420p",
 		"-b:v", kbps, "-maxrate", kbps, "-bufsize", kbps,
 		"-c:a", "aac", "-b:a", "128k",
 		"-flush_packets", "1", "-f", "mpegts", listenURL,

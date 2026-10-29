@@ -2,6 +2,7 @@ package output
 
 import (
 	"context"
+	"math/rand"
 	"net"
 	"os/exec"
 	"strconv"
@@ -120,6 +121,60 @@ func TestFeed_LateFirstCaller(t *testing.T) {
 	report := readFeed(t, bin, port)
 	if n := framesRead(report); n < 20 {
 		t.Errorf("a second of the feed after a 3 s wait held %d frames, want about 30:\n%s", n, report)
+	}
+}
+
+// The encoder spends the feed's bitrate: on frames that do not compress
+// (noise), a 320x180 feed comes near its 1000 kbit/s.
+func TestFeed_UsesItsBitrate(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	caps, err := ffmpeg.Probe(context.Background(), bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caps.Missing(ffmpeg.NeedSRT, ffmpeg.NeedH264Encoder, ffmpeg.NeedAACEncoder); err != nil {
+		t.Skip(err)
+	}
+	port := freeUDPPort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	const w, h = 320, 180
+	f, err := StartFeed(ctx, FeedConfig{FFmpeg: bin, Name: "Alice", Width: w, Height: h, Logger: quiet,
+		ListenURL: "srt://127.0.0.1:" + strconv.Itoa(port) + "?mode=listener&latency=120000&transtype=live"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Stop()
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		rng := rand.New(rand.NewSource(1))
+		video := time.NewTicker(compose.VideoInterval)
+		audio := time.NewTicker(compose.AudioInterval)
+		defer video.Stop()
+		defer audio.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-video.C:
+				frame := make([]byte, w*h*3/2)
+				rng.Read(frame)
+				f.WriteVideo(frame, time.Now())
+			case <-audio.C:
+				f.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes), time.Now())
+			}
+		}
+	}()
+
+	const seconds = 3
+	out, err := exec.Command(bin, "-v", "error", "-i", "srt://127.0.0.1:"+strconv.Itoa(port)+"?mode=caller&latency=120000",
+		"-t", strconv.Itoa(seconds), "-map", "0:v", "-c", "copy", "-f", "h264", "-").Output()
+	if err != nil {
+		t.Fatalf("reading the feed: %v", err)
+	}
+	if kbps := len(out) * 8 / seconds / 1000; kbps < 500 {
+		t.Errorf("the feed's video is %d kbit/s, want near 1000", kbps)
 	}
 }
 
