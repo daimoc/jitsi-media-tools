@@ -25,8 +25,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       # Ubuntu's ffmpeg is 6.1, the oldest the tool supports.
@@ -43,7 +43,13 @@ jobs:
           echo "$PWD/.tools/ffmpeg/bin" >> "$GITHUB_PATH"
       - run: ffmpeg -hide_banner -version | head -1
       - run: go vet ./...
-      - run: go test -race ./...
+      - run: go test -race ./... 2>&1 | tee test.log; exit ${PIPESTATUS[0]}
+      # Failures as annotations, which anyone can read (job logs need a login).
+      - name: Report failures
+        if: failure()
+        run: |
+          grep -E '^(--- FAIL|FAIL|panic:)|^\s+\S+_test\.go:[0-9]+:' test.log | head -60 > fail.txt || true
+          echo "::error title=go test::$(sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g' fail.txt)"
 
   # go.mod says go 1.23.0: the code must build with it.
   go1_23:
@@ -52,8 +58,8 @@ jobs:
     env:
       GOTOOLCHAIN: local
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
       - run: go build ./... && go vet ./...
@@ -63,8 +69,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
       # The WHIP test publishes with ffmpeg 8's -f whip.
