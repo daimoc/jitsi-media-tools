@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tutorial cover</title>
+<style>
+  :root { --bg: #0f1420; --text: #f2f5fa; --muted: #9aa7bd; --accent: #5aa7ff; --hot: #ffcf4a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: var(--bg);
+    font-family: "DejaVu Sans", Helvetica, Arial, sans-serif; color: var(--text); }
+  body { position: relative; }
+  /* The frame fills the right side and fades into the background. */
+  .shot { position: absolute; right: 0; top: 0; width: 760px; height: 720px; overflow: hidden; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; }
+  .shot::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--bg) 0%, rgba(15,20,32,.85) 22%, rgba(15,20,32,.1) 60%, rgba(15,20,32,0) 100%); }
+  /* A picture with black bands is shown whole, as a tilted screen. */
+  body.card .shot { right: 40px; top: 200px; width: 520px; height: 292px; border-radius: 14px;
+    border: 4px solid var(--accent); transform: rotate(-3deg); box-shadow: 0 24px 60px rgba(0,0,0,.65); background: #000; }
+  body.card .shot img { object-fit: contain; }
+  body.card .shot::after { display: none; }
+  body.card .sub { max-width: 560px; }
+  body.card .title { font-size: 90px; }
+  .tag { position: absolute; right: 60px; top: 510px; transform: rotate(-3deg); font-family: "DejaVu Sans Mono", monospace;
+    font-size: 26px; font-weight: 700; color: var(--bg); background: var(--accent); border-radius: 8px; padding: 6px 14px; }
+  .tag:empty { display: none; }
+  .text { position: absolute; left: 64px; top: 0; bottom: 0; width: 700px; display: flex; flex-direction: column;
+    justify-content: center; gap: 22px; }
+  .brand { font-size: 30px; font-weight: 700; letter-spacing: .3px; }
+  .brand span { color: var(--accent); }
+  .title { font-size: 104px; line-height: .98; font-weight: 800; letter-spacing: -2px;
+    text-shadow: 0 6px 24px rgba(0,0,0,.6); }
+  .title em { font-style: normal; color: var(--hot); }
+  .sub { font-size: 38px; line-height: 1.2; color: var(--text); font-weight: 600; max-width: 640px;
+    text-shadow: 0 3px 14px rgba(0,0,0,.7); }
+  .chip { align-self: flex-start; font-family: "DejaVu Sans Mono", monospace; font-size: 30px; color: #cfe3ff;
+    background: #0b0f17; border: 2px solid #2f3b52; border-radius: 12px; padding: 10px 18px; }
+  .badge { position: absolute; left: 64px; top: 46px; font-size: 24px; font-weight: 700; color: var(--bg);
+    background: var(--accent); border-radius: 8px; padding: 6px 14px; letter-spacing: .5px; }
+</style>
+</head>
+<body>
+<div class="shot"><img id="shot" alt=""></div>
+<div class="badge" id="badge"></div>
+<div class="tag" id="tag"></div>
+<div class="text">
+  <div class="brand">jitsi-<span>media</span>-tools</div>
+  <div class="title" id="title"></div>
+  <div class="sub" id="sub"></div>
+  <div class="chip" id="chip"></div>
+</div>
+<script>
+  // tutorials/covers.go fills it.
+  function setCover(c) {
+    document.documentElement.style.setProperty('--hot', c.accent);
+    document.documentElement.style.setProperty('--accent', c.accent);
+    document.body.className = c.card ? 'card' : '';
+    document.getElementById('tag').textContent = c.tag;
+    document.getElementById('badge').textContent = c.badge;
+    document.getElementById('title').innerHTML = c.title;
+    document.getElementById('sub').textContent = c.sub;
+    document.getElementById('chip').textContent = c.chip;
+    const img = document.getElementById('shot');
+    return new Promise(r => { img.onload = r; img.onerror = r; img.src = c.shot; });
+  }
+</script>
+</body>
+</html>

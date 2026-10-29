@@ -43,7 +43,7 @@ func main() {
 	out := flag.String("out", "out", "directory for the videos")
 	chrome := flag.String("chrome", "google-chrome", "Chrome or Chromium executable")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: go run . [flags] all | NAME...\n\ntutorials:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: go run . [flags] all | NAME... | covers [NAME...]\n\ntutorials:\n")
 		for _, t := range tutorials {
 			fmt.Fprintf(flag.CommandLine.Output(), "  %-10s %s\n", t.name, t.title)
 		}
@@ -53,6 +53,17 @@ func main() {
 	if flag.NArg() == 0 {
 		flag.Usage()
 		os.Exit(2)
+	}
+	if flag.Arg(0) == "covers" {
+		cfg, err := coverSetup(*chrome)
+		if err == nil {
+			err = makeCovers(cfg, *out, flag.Args()[1:])
+		}
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "covers:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	cfg, err := setup(*jitsi, *chrome)
 	if err != nil {
@@ -151,6 +162,25 @@ func setup(jitsi, chrome string) (config, error) {
 	}
 	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
+	return cfg, nil
+}
+
+// coverSetup finds what the covers need: Chrome and ffmpeg.
+func coverSetup(chrome string) (config, error) {
+	root, err := filepath.Abs("..")
+	if err != nil {
+		return config{}, err
+	}
+	cfg := config{root: root, cache: filepath.Join(root, "tutorials", ".cache")}
+	if cfg.chrome, err = exec.LookPath(chrome); err != nil {
+		return cfg, fmt.Errorf("%s not found: install Chrome or pass -chrome", chrome)
+	}
+	cfg.ffmpeg = filepath.Join(root, ".tools", "ffmpeg", "bin", "ffmpeg")
+	if _, err := os.Stat(cfg.ffmpeg); err != nil {
+		if cfg.ffmpeg, err = exec.LookPath("ffmpeg"); err != nil {
+			return cfg, errors.New("ffmpeg not found: run ./scripts/get-ffmpeg.sh")
+		}
+	}
 	return cfg, nil
 }
 

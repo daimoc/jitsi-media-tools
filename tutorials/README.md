@@ -35,6 +35,11 @@ Each tutorial writes `out/<name>.mp4` (1920x1080, 30 fps, H.264 with AAC narrati
 `out/<name>.srt` (the captions, for players and video sites). One takes 1.5–2.5 minutes to
 make; the narration is cached in `.cache/tts`.
 
+**YouTube thumbnails.** `go run . covers` writes `out/<name>-cover.jpg` once the videos are
+made. Each is 1280x720 and about 120 KB (YouTube takes up to 2 MB). Each pairs the title with
+a picture from that tutorial: a meeting frame, the mixed recording, or a frame of the grid
+feed. `cover.html` is the layout and `covers.go` holds the texts.
+
 Each tutorial uses its own room (`tut-publish`, `tut-record`…). The driver builds
 jitsi-media-tools from this clone. The Docker parts use the published image, so they show
 the code of the last push to `main`.
@@ -47,6 +52,7 @@ the code of the last push to `main`.
 | `stage.go` | Chrome (go-rod), the screencast, the bash in a PTY, and the steps: `Say`, `Type`, `WaitFor`, `Meeting`, `Card`… |
 | `stage.html` | The page: xterm.js, the right pane, the caption bar |
 | `media.go` | Piper, the audio mix, the `.srt` |
+| `covers.go`, `cover.html` | The YouTube thumbnails |
 | `tut_*.go` | One tutorial each: its steps and its narration |
 
 `Say` waits as long as the line takes to say, so the narration sets the pace. The video and
