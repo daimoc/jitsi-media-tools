@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,8 +37,19 @@ const (
 type UDPMux = ice.UDPMux
 
 // NewUDPMux listens on port of every IPv4 interface, loopback included,
-// for the peers given it (0: a free port per interface).
-func NewUDPMux(port int, logger *slog.Logger) (UDPMux, error) {
+// for the peers given it (0: a free port per interface). For peers given
+// a public address it is one socket on every interface: Pion keeps a
+// single candidate for that address, tied to the first socket, and would
+// drop what reaches the others, such as a container's eth0.
+func NewUDPMux(port int, public bool, logger *slog.Logger) (UDPMux, error) {
+	if public {
+		conn, err := net.ListenUDP("udp4", &net.UDPAddr{Port: port})
+		if err != nil {
+			return nil, err
+		}
+		return ice.NewUDPMuxDefault(ice.UDPMuxParams{UDPConn: conn,
+			Logger: slogLoggerFactory{logger}.NewLogger("udpmux")}), nil
+	}
 	return ice.NewMultiUDPMuxFromPort(port,
 		ice.UDPMuxFromPortWithNetworks(ice.NetworkTypeUDP4),
 		ice.UDPMuxFromPortWithLoopback(),

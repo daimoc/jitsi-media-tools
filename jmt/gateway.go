@@ -136,7 +136,7 @@ func NewGateway(o GatewayOptions) (*Gateway, error) {
 	if err != nil {
 		return nil, err
 	}
-	mux, err := peer.NewUDPMux(o.UDPPort, o.Logger)
+	mux, err := peer.NewUDPMux(o.UDPPort, len(publicIPs) > 0, o.Logger)
 	if err != nil {
 		ln.Close()
 		return nil, fmt.Errorf("gateway: UDP port %d: %w", o.UDPPort, err)

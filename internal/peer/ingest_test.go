@@ -11,9 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/ice/v2"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
+	"github.com/pion/stun"
 	"github.com/pion/webrtc/v3"
 )
 
@@ -282,7 +284,7 @@ func TestIngest_UDPMuxAndPublicIP(t *testing.T) {
 	}
 	port := strconv.Itoa(free.LocalAddr().(*net.UDPAddr).Port)
 	free.Close()
-	mux, err := NewUDPMux(free.LocalAddr().(*net.UDPAddr).Port, quietLogger)
+	mux, err := NewUDPMux(free.LocalAddr().(*net.UDPAddr).Port, true, quietLogger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,6 +311,77 @@ func TestIngest_UDPMuxAndPublicIP(t *testing.T) {
 			}
 		}
 	}
+}
+
+// A publisher that only talks to the address in the answer, as OBS and
+// ffmpeg do, gets a reply at the public address. That address is not the
+// first one the mux listens on (loopback is), as for a gateway behind NAT
+// or in a container.
+func TestIngest_AnswersAtPublicIP(t *testing.T) {
+	public := outboundIPv4(t)
+	free, err := net.ListenUDP("udp4", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := free.LocalAddr().(*net.UDPAddr).Port
+	free.Close()
+	mux, err := NewUDPMux(port, true, quietLogger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mux.Close()
+	pub, _, _ := publisherPC(t, h264High, true)
+	offer := offerOf(t, pub)
+	ing, answer, err := NewIngest(IngestConfig{Logger: quietLogger, UDPMux: mux, PublicIPs: []string{public}}, offer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ing.Close()
+
+	c, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP(public), Port: port})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	req := stun.MustBuild(stun.TransactionID, stun.BindingRequest,
+		stun.NewUsername(sdpValue(answer, "ice-ufrag")+":"+sdpValue(offer, "ice-ufrag")),
+		ice.AttrControlling(1), ice.PriorityAttr(1<<24),
+		stun.NewShortTermIntegrity(sdpValue(answer, "ice-pwd")), stun.Fingerprint)
+	buf := make([]byte, 1500)
+	for i := 0; i < 10; i++ {
+		c.Write(req.Raw)
+		c.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+		n, err := c.Read(buf)
+		if err != nil {
+			continue
+		}
+		res := &stun.Message{Raw: append([]byte(nil), buf[:n]...)}
+		if err := res.Decode(); err == nil && res.Type == stun.BindingSuccess {
+			return
+		}
+	}
+	t.Fatalf("no binding response at %s:%d", public, port)
+}
+
+// sdpValue returns the first a=key: value in sdp.
+func sdpValue(sdp, key string) string {
+	for _, l := range strings.Split(sdp, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(l), "a="+key+":"); ok {
+			return v
+		}
+	}
+	return ""
+}
+
+// outboundIPv4 returns this machine's address towards other hosts.
+func outboundIPv4(t *testing.T) string {
+	t.Helper()
+	c, err := net.Dial("udp4", "192.0.2.1:9") // TEST-NET-1: routing lookup only
+	if err != nil {
+		t.Skip("no IPv4 route:", err)
+	}
+	defer c.Close()
+	return c.LocalAddr().(*net.UDPAddr).IP.String()
 }
 
 func TestH264Keyframe(t *testing.T) {
