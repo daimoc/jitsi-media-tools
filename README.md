@@ -1,5 +1,8 @@
 # jitsi-media-tools
 
+[![CI](https://github.com/daimoc/jitsi-media-tools/actions/workflows/ci.yml/badge.svg)](https://github.com/daimoc/jitsi-media-tools/actions/workflows/ci.yml)
+[![Docker](https://github.com/daimoc/jitsi-media-tools/actions/workflows/docker.yml/badge.svg)](https://github.com/daimoc/jitsi-media-tools/pkgs/container/jitsi-media-tools)
+
 A command-line tool and Go library that joins a [Jitsi Meet](https://jitsi.org/jitsi-meet/)
 room as one participant, publishes media into it, and plays what the other participants send.
 

@@ -1,30 +1,96 @@
-name: ci
+name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test:
+    name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23.x"
-      - name: Install ffmpeg (Linux)
+          go-version-file: go.mod
+      # Ubuntu's ffmpeg is 6.1, the oldest the tool supports.
+      - name: ffmpeg (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - name: Install ffmpeg (macOS)
+      - name: ffmpeg (macOS)
         if: runner.os == 'macOS'
         run: brew install ffmpeg
-      - name: Install ffmpeg (Windows)
+      - name: ffmpeg (Windows)
         if: runner.os == 'Windows'
-        run: choco install ffmpeg -y
-      - run: ffmpeg -hide_banner -version
+        run: |
+          ./scripts/get-ffmpeg.sh
+          echo "$PWD/.tools/ffmpeg/bin" >> "$GITHUB_PATH"
+      - run: ffmpeg -hide_banner -version | head -1
       - run: go vet ./...
       - run: go test -race ./...
+
+  # go.mod says go 1.23.0: the code must build with it.
+  go1_23:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOTOOLCHAIN: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - run: go build ./... && go vet ./...
+
+  # End to end against a local Jitsi in Docker (tests/platforms/jitsi).
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The WHIP test publishes with ffmpeg 8's -f whip.
+      - name: ffmpeg
+        run: |
+          ./scripts/get-ffmpeg.sh
+          echo "$PWD/.tools/ffmpeg/bin" >> "$GITHUB_PATH"
+      - name: Start Jitsi
+        working-directory: tests/platforms/jitsi
+        run: ./setup.sh && docker compose up -d --quiet-pull
+      - name: Wait for Jitsi
+        run: |
+          for i in $(seq 90); do
+            if curl -fsk https://localhost:8443/config.js >/dev/null && curl -fs http://127.0.0.1:8080/about/health >/dev/null; then
+              sleep 10   # Jicofo and the bridge finish registering
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Jitsi did not start"; exit 1
+      - name: Live tests
+        env:
+          JMT_URL: https://localhost:8443/jmt-live
+          JMT_INSECURE: '1'
+        run: go test -tags live -count=1 -v ./tests/live/
+      - name: Jitsi logs
+        if: failure()
+        working-directory: tests/platforms/jitsi
+        run: docker compose logs --tail 200
