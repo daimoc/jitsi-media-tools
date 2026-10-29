@@ -131,8 +131,11 @@ func (s *fakeXMPPServer) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	go func() {
-		defer close(c.closed)
+		// The client's stream has ended once the decoder returns: say so
+		// before closing our side, whose handshake can wait 5 s when both
+		// sides close at once.
 		defer conn.Close(ws.StatusNormalClosure, "")
+		defer close(c.closed)
 		defer cancel()
 		dec := xml.NewDecoder(pr)
 		authed, announced := false, false

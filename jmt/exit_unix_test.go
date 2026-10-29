@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
 )
 
 func TestExit_CtrlC(t *testing.T) {
@@ -49,6 +51,7 @@ func TestExit_Killed(t *testing.T) {
 // with the processes it started, once it has joined and records.
 func startHelper(t *testing.T) (*exec.Cmd, []int) {
 	t.Helper()
+	ffmpegtest.Require(t) // The helper records
 	cmd := exec.Command(os.Args[0], "-test.run=^TestExit_Helper$")
 	cmd.Env = append(os.Environ(), "JMT_EXIT_HELPER="+t.TempDir())
 	cmd.Stderr = os.Stderr

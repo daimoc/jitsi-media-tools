@@ -15,6 +15,7 @@ import (
 
 	"github.com/daimoc/jitsi-media-tools/internal/compose"
 	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg"
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
 	"github.com/daimoc/jitsi-media-tools/internal/session/sessiontest"
 	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
@@ -207,6 +208,7 @@ func av1Sender(f *fakeSignal, owner string) {
 }
 
 func TestEdge_UndecodableCodec(t *testing.T) {
+	ffmpegtest.Require(t)
 	f := &fakeSignal{Occupants: []signaling.Occupant{{ID: "alice1", DisplayName: "Alice"}}}
 	useFake(t, f)
 	av1Sender(f, "alice1")

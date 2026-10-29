@@ -58,6 +58,7 @@ func nextEvent(t *testing.T, s *Session) Event {
 }
 
 func TestSession_Events(t *testing.T) {
+	ffmpegtest.Require(t) // Receiving starts decoders
 	f := fakeRoom(t, false)
 	s := join(t)
 	if e := nextEvent(t, s); e.Kind != ParticipantJoined || e.Participant.ID != "alice1" || e.Participant.Name != "Alice" {

@@ -40,7 +40,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           ./scripts/get-ffmpeg.sh
-          echo "$PWD/.tools/ffmpeg/bin" >> "$GITHUB_PATH"
+          cygpath -w "$PWD/.tools/ffmpeg/bin" >> "$GITHUB_PATH"   # A Windows path, for go test's processes
       - run: ffmpeg -hide_banner -version | head -1
       - run: go vet ./...
       - run: go test -race ./... 2>&1 | tee test.log; exit ${PIPESTATUS[0]}

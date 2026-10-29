@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/daimoc/jitsi-media-tools/internal/ffmpeg/ffmpegtest"
 	"github.com/daimoc/jitsi-media-tools/internal/signaling"
 )
 
@@ -73,6 +74,7 @@ func TestBudget_Steps(t *testing.T) {
 // With a budget, the session asks the bridge for the reduced selection and
 // offers it the budget (FR-033).
 func TestBudget_PolicySent(t *testing.T) {
+	ffmpegtest.Require(t) // Receiving starts decoders
 	var occ []signaling.Occupant
 	for _, n := range []string{"Alice", "Bob", "Carol", "Dan", "Erin"} {
 		occ = append(occ, signaling.Occupant{ID: n + "1", DisplayName: n})
