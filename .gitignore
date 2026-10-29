@@ -11,3 +11,5 @@ Thumbs.db
 .idea/
 /.tools/
 /tests/platforms/jitsi/.env
+/tutorials/out/
+/tutorials/.cache/

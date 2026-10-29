@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>jitsi-media-tools tutorial</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #161d2c;
+    --line: #2a3448;
+    --text: #e7ecf3;
+    --muted: #93a0b5;
+    --accent: #5aa7ff;
+    --ok: #57d48a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg);
+    color: var(--text); font-family: "DejaVu Sans", Helvetica, Arial, sans-serif; }
+  header { height: 72px; display: flex; align-items: center; gap: 18px; padding: 0 36px;
+    border-bottom: 1px solid var(--line); }
+  header .brand { font-weight: 700; font-size: 26px; letter-spacing: .3px; }
+  header .brand span { color: var(--accent); }
+  header .title { font-size: 24px; color: var(--muted); }
+  header .step { margin-left: auto; font-size: 20px; color: var(--muted); }
+  main { height: 848px; display: grid; grid-template-columns: 940px 940px; gap: 20px; padding: 20px; }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; }
+  .pane > .label { height: 40px; flex: none; display: flex; align-items: center; padding: 0 18px; font-size: 17px;
+    color: var(--muted); border-bottom: 1px solid var(--line); gap: 10px; }
+  .dots { display: flex; gap: 7px; }
+  .dots i { width: 12px; height: 12px; border-radius: 50%; background: #3a4458; display: block; }
+  #term { flex: 1; padding: 12px 14px; background: #0b0f17; }
+  #term .xterm-viewport { overflow-y: hidden !important; }
+  #right { position: relative; flex: 1; background: #000; }
+  #right > * { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  #right img, #right video { object-fit: contain; background: #000; }
+  .card { padding: 44px 48px; background: var(--panel); overflow: hidden; font-size: 24px; line-height: 1.45; }
+  .card h2 { margin: 0 0 24px; font-size: 34px; }
+  .card p { margin: 0 0 18px; color: var(--muted); }
+  .card table { border-collapse: collapse; width: 100%; font-size: 22px; }
+  .card td { padding: 13px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .card td:first-child { color: var(--muted); width: 34%; }
+  .card code, .card pre { font-family: "DejaVu Sans Mono", monospace; font-size: 20px; color: #cfe3ff; }
+  .card pre { background: #0b0f17; border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px;
+    margin: 0 0 18px; white-space: pre-wrap; }
+  .card .big { font-size: 46px; font-weight: 700; margin: 120px 0 26px; }
+  .card .accent { color: var(--accent); }
+  footer { height: 160px; display: flex; align-items: center; justify-content: center; padding: 0 120px; }
+  #caption { font-size: 33px; line-height: 1.35; text-align: center; max-width: 1640px; min-height: 1px;
+    background: rgba(0,0,0,.35); padding: 14px 26px; border-radius: 10px; }
+  #caption:empty { background: none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">jitsi-<span>media</span>-tools</div>
+  <div class="title" id="title"></div>
+  <div class="step" id="step"></div>
+</header>
+<main>
+  <section class="pane">
+    <div class="label"><span class="dots"><i></i><i></i><i></i></span>Terminal</div>
+    <div id="term"></div>
+  </section>
+  <section class="pane">
+    <div class="label" id="rightLabel">The meeting</div>
+    <div id="right"></div>
+  </section>
+</main>
+<footer><div id="caption"></div></footer>
+<script>
+  // The driver (tutorials/stage.go) calls these.
+  const term = new Terminal({cols: COLS, rows: ROWS, fontSize: 21, fontFamily: '"DejaVu Sans Mono", monospace',
+    cursorBlink: false, theme: {background: '#0b0f17', foreground: '#e7ecf3'}});
+  term.open(document.getElementById('term'));
+  function termWrite(b64) {
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    term.write(bytes);
+  }
+  function setText(id, text) { document.getElementById(id).textContent = text; }
+  // The meeting stays loaded under whatever else is shown, so the Viewer
+  // stays in it.
+  let meeting = null, overlay = null;
+  function show(label, el) {
+    const right = document.getElementById('right');
+    if (overlay) overlay.remove();
+    overlay = el;
+    if (el) right.appendChild(el);
+    setText('rightLabel', label);
+  }
+  function showMeeting(label, url) {
+    if (!meeting || meeting.dataset.url !== url) {
+      if (meeting) meeting.remove();
+      meeting = document.createElement('iframe');
+      meeting.allow = 'camera; microphone; autoplay; display-capture';
+      meeting.dataset.url = url;
+      meeting.src = url;
+      document.getElementById('right').prepend(meeting);
+    }
+    show(label, null);
+  }
+  function showCard(label, html) {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = html;
+    show(label, d);
+  }
+  function showVideo(label, src) {
+    const v = document.createElement('video');
+    v.src = src; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true;
+    show(label, v);
+  }
+  function showImage(label, src) {
+    const i = document.createElement('img');
+    i.src = src;
+    show(label, i);
+  }
+  window.stageReady = true;
+</script>
+</body>
+</html>
