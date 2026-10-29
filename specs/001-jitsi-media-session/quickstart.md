@@ -45,9 +45,10 @@ Let `R=https://localhost:8443/IntriguingClimatesSupposeProbably` and
 8. **Large room** (US8): start the load engine with 20 bots in the same room
    (`go run ./cmd/jitsi-connect … --participants 20 --media audio_video` in webrtc-load-engine),
    then `$jmt join … --display --pin "<bot name>"` → at most 9 tiles, the pinned one always shown.
-9. **OBS into the meeting** (US9): `WHIP_API_SECRET=s3cret $jmt serve --insecure`. In OBS 30+ set
+9. **OBS into the meeting** (US9): `WHIP_API_SECRET=s3cret $jmt serve --insecure --listen :8090` (the
+   local Videobridge holds `127.0.0.1:8080`). In OBS 30+ set
    Settings → Stream → Service "WHIP", Server
-   `http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS`, Bearer Token `s3cret`; with a
+   `http://127.0.0.1:8090/whip/localhost:8443/test?name=OBS`, Bearer Token `s3cret`; with a
    browser in the room, start streaming → "OBS" joins and the browser shows the scene and plays
    its audio; stop streaming → "OBS" leaves within 2 s. A wrong token → OBS reports an error and
    nobody joins.

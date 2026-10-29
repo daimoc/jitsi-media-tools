@@ -8,7 +8,8 @@ room as one participant, publishes media into it, and plays what the other parti
 
 - **Publish**: a media file (once or looped), or a camera and microphone.
 - **OBS gateway**: a WHIP endpoint that streams OBS (or any WHIP publisher) into any Jitsi
-  meeting as a participant, its H.264 and Opus passed through unchanged.
+  meeting as a participant, its H.264 and Opus passed through unchanged. See
+  [Stream OBS into a meeting](#stream-obs-into-a-meeting-whip-gateway), with or without Docker.
 - **Play**: show the room in a Jitsi-style tile grid, record it (one file per participant or
   one mixed file), and serve SRT feeds that OBS Media Sources can read.
 - **Library**: the `jmt` package gives the same features to other programs, such as an OBS
@@ -101,7 +102,9 @@ out of scope and what was not tested.
 ### Or run it in Docker
 
 The image holds the tool and the pinned ffmpeg build, for linux/amd64 and linux/arm64. It
-has no ffplay and no shell, so `--display` is not available; everything else is.
+has no ffplay and no shell, so `--display` is not available; everything else is. CI
+publishes it as `ghcr.io/daimoc/jitsi-media-tools`: `main` follows the main branch, and each
+release has its version as tag. The examples below use an image built from a clone:
 
 ```bash
 docker build -t jitsi-media-tools .
@@ -120,14 +123,8 @@ docker run --rm --network host -v "$PWD/samples:/media:ro" \
   flags there:
   - **SRT feeds:** publish the ports and name the host in the feed URLs, for example
     `-p 9000-9016:9000-9016/udp … --obs --obs-url-host 192.168.1.20`.
-  - **WHIP gateway:** publish its two ports and give the host's address with `--public-ip`.
-    `compose.yaml` does this:
-
-    ```bash
-    WHIP_API_SECRET=change-me JMT_PUBLIC_IP=192.168.1.20 docker compose up -d
-    ```
-
-    `JMT_WHIP_PORT` changes the HTTP port on the host (8080 by default).
+  - **WHIP gateway:** publish its two ports and give the host's address with `--public-ip`;
+    `compose.yaml` does both. See [Stream OBS into a meeting](#stream-obs-into-a-meeting-whip-gateway).
 - **Files.** The image runs as an unprivileged user. Use `--user` so that recordings in a
   mounted directory belong to you, and mount the files you publish.
 - **Stopping.** `docker stop` ends the session as Ctrl+C does: the tool leaves the meeting,
@@ -142,7 +139,7 @@ docker run --rm --network host -v "$PWD/samples:/media:ro" \
 
 ```text
 jitsi-media-tools join --url URL [--name NAME] [options]
-jitsi-media-tools serve [options]
+jitsi-media-tools serve [options]        # WHIP gateway: see "Stream OBS into a meeting"
 jitsi-media-tools devices [--ffmpeg PATH]
 ```
 
@@ -280,58 +277,6 @@ record Alice ./rec/myroom-20261028-091500-Alice.mkv
 - **CPU:** each file is encoded by its own ffmpeg, so recording a participant who also has an
   OBS feed encodes them twice while OBS watches.
 
-### Stream OBS into a meeting (WHIP gateway)
-
-```bash
-WHIP_API_SECRET=change-me jitsi-media-tools serve --public-ip 203.0.113.5
-```
-
-Then, in OBS 30 or newer, go to Settings → Stream:
-
-| Field | Value |
-|---|---|
-| Service | WHIP |
-| Server | `http://203.0.113.5:8080/whip/meet.example.org/MyRoom?name=OBS` |
-| Bearer Token | the secret |
-
-When you start streaming, "OBS" joins `https://meet.example.org/MyRoom` and shows your
-scene. When you stop streaming, it leaves. The server address names the meeting:
-`/whip/<server[:port]>/<room>`, with a tenant path such as `/whip/meet.example.org/acme/MyRoom`
-where the deployment uses one, and `&jwt=<token>` for a server that needs a token. One
-gateway serves several streams at once, into any Jitsi meetings.
-
-- Set OBS's encoder to H.264 (x264 or a hardware H.264 encoder) and the audio to Opus, its
-  WHIP default. The gateway passes them through unchanged, so OBS's resolution, bitrate and
-  keyframe interval are what the meeting gets. The gateway refuses AV1 and HEVC.
-- **Set OBS's keyframe interval to 1 s** (Settings → Output, Output Mode "Advanced",
-  Keyframe Interval). Viewers see video from a keyframe on, and a publisher that ignores
-  keyframe requests makes them wait for its next one: about 8 s with OBS's "0 (auto)" and
-  x264. The gateway logs a warning when that happens. With a 1 s interval, the meeting shows
-  the stream about 1.5–2.5 s after you start streaming. About 1 s of that is the Jitsi
-  server setting up the participant's media, which happens for any participant.
-- [docs/obs-whip.md](docs/obs-whip.md) gives the OBS settings for a quick start, a low delay
-  or the best picture.
-- The meeting starts receiving media once a second participant is in it.
-- A stream that sends nothing for 10 s leaves the meeting.
-- The OBS tile's connection details in the meeting (its signal bars) show the stream's
-  bitrate, its packet loss from OBS to the meeting, and a connection quality.
-
-| Option | Default |
-|---|---|
-| `$WHIP_API_SECRET` or `--secret-file FILE`: the bearer token | required |
-| `--listen`: HTTP address | `:8080` |
-| `--udp-port`: one UDP port for all streams' media | 8189 |
-| `--public-ip`: the address OBS reaches, for a server behind NAT | local addresses |
-| `--tls-cert`, `--tls-key`: serve HTTPS (or put a reverse proxy in front) | HTTP |
-| `--max-streams` | 10 |
-| `--insecure`, `--wait-host`: for the meetings' servers | off, `30s` |
-
-On a public server, open the HTTP port (TCP) and the UDP port. To run the gateway in
-Docker, see [Or run it in Docker](#or-run-it-in-docker). The bearer token travels in
-every request, so use HTTPS across the internet. `serve` prints one line per stream: `+ OBS
-meet.example.org/MyRoom` when it starts, `-` when it ends, and `!` with the reason when it
-fails.
-
 ### Choose the video you receive
 
 ```bash
@@ -363,6 +308,142 @@ also offered to the bridge, which enforces it itself where its operator set
 
 Other options: `--ffmpeg` and `--ffplay` set the executables, and `--log-level`
 takes `debug`, `info` or `warn`.
+
+## Stream OBS into a meeting (WHIP gateway)
+
+`serve` is a [WHIP](https://www.rfc-editor.org/rfc/rfc9725) endpoint. OBS 30 or newer, or
+any other WHIP publisher, streams to it, and each stream joins the Jitsi meeting named in
+its address as a participant. The H.264 video and Opus audio pass through unchanged, so the
+gateway needs no ffmpeg and little CPU. One gateway serves several streams at once, into
+any Jitsi meetings.
+
+```text
+OBS ── WHIP: HTTP offer/answer, then WebRTC media ──▶ serve ── one participant per stream ──▶ Jitsi meeting
+```
+
+### 1. Start the gateway
+
+Pick a secret. OBS sends it as its bearer token, and the gateway refuses any stream without
+it. The gateway never logs it.
+
+**Without Docker.** Build the tool (see [Install](#install); ffmpeg is not needed), then:
+
+```bash
+WHIP_API_SECRET=change-me jitsi-media-tools serve
+```
+
+**With Docker Compose.** No clone is needed, only [`compose.yaml`](compose.yaml):
+
+```bash
+curl -O https://raw.githubusercontent.com/daimoc/jitsi-media-tools/main/compose.yaml
+WHIP_API_SECRET=change-me JMT_PUBLIC_IP=192.168.1.20 docker compose up -d
+docker compose logs -f
+```
+
+| Variable | Meaning | Default |
+|---|---|---|
+| `WHIP_API_SECRET` | The bearer token | required |
+| `JMT_PUBLIC_IP` | The address OBS reaches this machine at: its LAN address when OBS is on the same network, its public address on a server. The container cannot find it out | required |
+| `JMT_WHIP_PORT` | The HTTP port on this machine. `serve` still prints 8080, the port inside the container | 8080 |
+| `JMT_TAG` | The image tag: `main`, or a release such as `0.1.0` | `main` |
+
+`docker compose up -d --build` builds the image from a clone instead of pulling it.
+
+**With `docker run`, on Linux.** On the host network, no port is published and no address
+needs to be given on a LAN:
+
+```bash
+docker run -d --name jmt-whip --restart unless-stopped --network host \
+  -e WHIP_API_SECRET=change-me ghcr.io/daimoc/jitsi-media-tools:main serve
+```
+
+On Docker Desktop (macOS, Windows), use Compose.
+
+### 2. Set up OBS
+
+In OBS, go to Settings → Stream:
+
+| Field | Value |
+|---|---|
+| Service | WHIP |
+| Server | `http://<gateway>:8080/whip/meet.example.org/MyRoom?name=OBS` |
+| Bearer Token | the secret |
+
+The server address names the meeting and the participant:
+
+- `/whip/<server[:port]>/<room>` joins `https://<server[:port]>/<room>`. Where the
+  deployment uses a tenant, add it to the path: `/whip/meet.example.org/acme/MyRoom`.
+- `?name=` is the display name in the meeting; it is required.
+- `&jwt=<token>` gives a token to a server that needs one.
+
+Then set the encoding (Settings → Output, Output Mode "Advanced"):
+
+- **Video encoder:** H.264 (x264, or a hardware H.264 encoder). The gateway refuses AV1 and
+  HEVC. **Audio:** Opus, OBS's WHIP default.
+- **Keyframe interval: 1 s.** Viewers see video from a keyframe on, and a publisher that
+  ignores keyframe requests makes them wait for its next one: about 8 s with OBS's
+  "0 (auto)" and x264. The gateway logs a warning when that happens.
+- OBS's resolution, frame rate and bitrate are what the meeting gets.
+  [docs/obs-whip.md](docs/obs-whip.md) gives settings for a quick start, a low delay or the
+  best picture.
+
+### 3. Stream
+
+Start streaming in OBS: "OBS" joins the meeting and shows your scene, about 1.5–2.5 s later
+with a 1 s keyframe interval. About 1 s of that is the Jitsi server setting up the
+participant's media, which happens for any participant. Stop streaming and it leaves.
+
+- The meeting starts receiving media once a second participant is in it.
+- A stream that sends nothing for 10 s leaves the meeting.
+- The OBS tile's connection details in the meeting (its signal bars) show the stream's
+  bitrate, its packet loss from OBS to the meeting, and a connection quality.
+- `serve` prints one line per stream: `+ OBS meet.example.org/MyRoom` when it starts, `-`
+  when it ends, and `!` with the reason when it fails.
+
+### Options
+
+| Option | Default |
+|---|---|
+| `$WHIP_API_SECRET` or `--secret-file FILE`: the bearer token | required |
+| `--listen`: HTTP address | `:8080` |
+| `--udp-port`: one UDP port for all streams' media | 8189 |
+| `--public-ip`: the address OBS reaches, for a server behind NAT or in a container | local addresses |
+| `--tls-cert`, `--tls-key`: serve HTTPS (or put a reverse proxy in front) | HTTP |
+| `--max-streams` | 10 |
+| `--insecure`, `--wait-host`: for the meetings' servers | off, `30s` |
+
+### Network and security
+
+- **Ports:** the HTTP port (TCP, 8080) and one UDP port for every stream's media (8189).
+  Open both in the firewall.
+- **Behind NAT, or in a container on a bridge network:** set `--public-ip` (`JMT_PUBLIC_IP`
+  with Compose). Without it, the gateway gives OBS its own local addresses, which OBS
+  cannot reach, and the connection times out.
+- **HTTPS:** the bearer token travels in every request, so across the internet use
+  `--tls-cert` and `--tls-key`, or a reverse proxy in front of the HTTP port. The media is
+  encrypted by WebRTC either way, and goes to the UDP port directly, not through the proxy.
+- **A Jitsi Videobridge on the same machine** (docker-jitsi-meet) already uses
+  `127.0.0.1:8080`: give the gateway another port, for example `--listen :8090`.
+
+### Try it on the local Jitsi
+
+With the local server running (see [Try it on a local Jitsi](#try-it-on-a-local-jitsi))
+and a browser in `https://localhost:8443/test`:
+
+```bash
+WHIP_API_SECRET=s3cret jitsi-media-tools serve --insecure --listen :8090
+# or: docker run --rm --network host -e WHIP_API_SECRET=s3cret \
+#       ghcr.io/daimoc/jitsi-media-tools:main serve --insecure --listen :8090
+```
+
+In OBS, use the server `http://127.0.0.1:8090/whip/localhost:8443/test?name=OBS` and the
+token `s3cret`. Without OBS, ffmpeg 8 or newer can publish a test pattern:
+
+```bash
+ffmpeg -re -f lavfi -i testsrc2=size=1280x720:rate=30 -f lavfi -i sine=frequency=440 \
+  -c:v libx264 -preset veryfast -tune zerolatency -g 30 -c:a libopus -ar 48000 -ac 2 \
+  -f whip -authorization s3cret "http://127.0.0.1:8090/whip/localhost:8443/test?name=Pattern"
+```
 
 ## Library usage
 

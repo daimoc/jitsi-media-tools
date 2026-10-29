@@ -36,7 +36,7 @@ go vet ./... && go test -race ./...     # keep green
 JMT_URL=https://localhost:8443/jmt-live JMT_INSECURE=1 go test -tags live -count=1 -v ./tests/live/
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/IntriguingClimatesSupposeProbably --insecure --name Bot --display
 go run ./tests/displaycheck --url https://localhost:8443/jmt-display --insecure   # latency to the screen, by screenshot
-WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure   # WHIP gateway; OBS server http://127.0.0.1:8080/whip/localhost:8443/test?name=OBS
+WHIP_API_SECRET=s3cret go run ./cmd/jitsi-media-tools serve --insecure --listen :8090   # WHIP gateway (the local JVB holds 127.0.0.1:8080); OBS server http://127.0.0.1:8090/whip/localhost:8443/test?name=OBS
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Rec --record /tmp/rec   # --record-mode mixed
 go run ./cmd/jitsi-media-tools devices && go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Cam --publish device:/dev/video0,default
 go run ./cmd/jitsi-media-tools join --url https://localhost:8443/test --insecure --name Viewer --display --pin Alice --video-budget 3M
