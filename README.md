@@ -60,8 +60,7 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 | Recording (`--record`) | Done |
 | SRT feeds for OBS (`--obs`, `--obs-grid`) | Done |
 | Decoded frames and samples in the library | Done |
-
-The flags for the unfinished features are already parsed, but they do nothing yet.
+| Large rooms: video limit, pins, budget (`--video-limit`, `--pin`, `--video-budget`) | Done |
 
 ## Requirements
 

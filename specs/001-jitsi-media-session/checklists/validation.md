@@ -145,5 +145,41 @@ jitsi-media-tools join --url https://localhost:8443/jmt-budget --insecure --name
   (3 videos estimated over 85% of the budget).
 - [x] `assumedBandwidthBps` is in every `ReceiverVideoConstraints`; the local bridge does not
   enforce it (`assumed-bandwidth-limit` unset).
-- [ ] Resolution steps (unpinned 360 → 180, pinned 720 → 360 → 180): need simulcast senders
-  (browsers), with T065.
+- [x] Resolution steps with simulcast senders: see Scenario 8 below.
+
+## Scenario 8: Large room (US8, T065)
+
+Date: 2026-10-29. Local Jitsi, room `jmt-large`: 20 webrtc-load-engine bots (commit
+356166e) sending Opus and three-layer VP8 simulcast up to 720p, each receiving 4 streams:
+
+```bash
+# webrtc-load-engine
+JITSI_ROOM_URL=http://localhost:8000/jmt-large JITSI_XMPP_DOMAIN=meet.jitsi \
+JITSI_MUC_DOMAIN=muc.meet.jitsi JITSI_WS_URL=ws://localhost:8000/xmpp-websocket \
+JITSI_PARTICIPANTS=20 JITSI_MEDIA=audio_video JITSI_SIMULCAST=720 JITSI_MAX_RECEIVED=4 \
+JITSI_RAMP_UP=10 JITSI_HOLD=40m go test -tags live -count=1 -timeout 60m ./tests/live/ -run Jitsi
+```
+
+Videos arriving were counted from the session's per-window debug log (a 100M budget, which
+never acts, turns it on).
+
+- [x] Default selection, one bot pinned: 9 videos arrive (the pin and 8 others) of 20.
+- [x] The pin comes at 720p: 2.9 Mbps in all, 1.5 Mbps with `--pin-height 180`.
+- [x] `--video-budget 1.2M`: the pin alone at 720p (≈ 1.6 Mbps measured) cannot fit, so the
+  others go, then the pin drops to 360p: ≈ 0.5 Mbps, steady.
+- [x] `--video-budget 2.4M`: from the pin alone at 360p, two steps up to the pin at 720p and
+  3 others; ≈ 2.05 Mbps (85% of the budget), steady for 40 s.
+- [x] SC-005 (30 min, display, mixed recording and OBS feeds with the grid all on, default
+  selection): the tool stayed in the room and exited 0; no warnings or errors; 1.4–1.5 cores
+  (median 1.505, max 1.535) for the tool and its 42 ffmpeg/ffplay processes; their summed
+  resident memory 1.54 → 1.63 GB. The 30 min 08 s grid recording: 53 906 frames (29.8 fps),
+  no freeze over 1 s (`freezedetect`), no silence over 1 s; 9 tiles at 180p with names.
+- [ ] Not checked: 100 participants (SC-005's figure; 20 here); the tiles following the
+  speaker (the bots all send the same tone, so the dominant speaker hardly changes); the
+  unpinned 360 → 180 step (default height already 180).
+
+Found and fixed during the check:
+
+- With a 2.4M budget the level climbed twice in 2 s and overshot (6 videos, 2.47 Mbps),
+  then came back down: the window after a move still measured the old videos. Windows are
+  now ignored for 5 s after each move.
