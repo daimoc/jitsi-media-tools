@@ -47,7 +47,8 @@ what was changed to make it faster.
 
 ## Status
 
-Work in progress: feature `specs/001-jitsi-media-session`.
+Every feature of `specs/001-jitsi-media-session` is built. [Limits](#limits) says what is
+out of scope and what was not tested.
 
 | Feature | State |
 |---|---|
@@ -65,22 +66,31 @@ Work in progress: feature `specs/001-jitsi-media-session`.
 ## Requirements
 
 - Go 1.23 or newer, to build.
-- ffmpeg 6 or newer, built with libvpx, libopus and libsrt, plus ffplay for the window.
-  `./scripts/get-ffmpeg.sh` downloads a pinned build into `.tools/ffmpeg/bin` on Linux and
-  Windows; no root is needed. On macOS, use `brew install ffmpeg`.
+- ffmpeg 6 or newer, built with libvpx, libopus, libx264 and libsrt, plus ffplay for the
+  window. The WHIP gateway (`serve`) needs no ffmpeg.
 - Docker, only for the local test server.
-
-The WHIP gateway (`serve`) needs no ffmpeg.
 
 ## Install
 
-Build from a clone:
+1. Install ffmpeg:
 
-```bash
-./scripts/get-ffmpeg.sh       # if ffmpeg is not installed
-source scripts/env.sh         # puts .tools/ffmpeg/bin (and /usr/local/go/bin) in PATH
-go build -o jitsi-media-tools ./cmd/jitsi-media-tools
-```
+   | System | Command |
+   |---|---|
+   | Debian, Ubuntu | `sudo apt install ffmpeg` |
+   | macOS | `brew install ffmpeg` |
+   | Windows | `choco install ffmpeg`, or `winget install Gyan.FFmpeg` |
+   | Linux or Windows, no root | `./scripts/get-ffmpeg.sh` (from Git Bash on Windows) downloads a pinned build into `.tools/ffmpeg/bin` |
+
+   The tool looks for `ffmpeg` and `ffplay` in `PATH`; `--ffmpeg` and `--ffplay` point to
+   other ones. Before joining, it checks that ffmpeg has the codecs and formats the chosen
+   options need, and names what is missing.
+
+2. Build from a clone:
+
+   ```bash
+   source scripts/env.sh         # puts .tools/ffmpeg/bin (and /usr/local/go/bin) in PATH
+   go build -o jitsi-media-tools ./cmd/jitsi-media-tools
+   ```
 
 ## Command-line usage
 
@@ -361,6 +371,32 @@ pub.WriteAudio(chunk)                              // every 20 ms
 `jmt.NewGateway` runs the WHIP gateway from a program, with the same options as `serve`;
 `Events()` reports streams starting, ending and failing.
 
+## Limits
+
+- **Room size.** The tool is designed for rooms of up to 100 participants. It was checked
+  with 20: for 30 minutes, with the window, a mixed recording and OBS feeds all on, it used
+  about 1.5 CPU cores and the grid never froze.
+- **Not supported:** chat, moderation, lobby management, breakout rooms, and end-to-end
+  encrypted meetings. The tool declines peer-to-peer calls, so a two-person meeting goes
+  through the Videobridge.
+- **Codecs.** The tool receives VP8, VP9 and H.264 video and Opus audio. A participant who
+  sends AV1 shows a name card, and the tool logs a warning once. It publishes one VP8 layer
+  (no simulcast) and Opus; the gateway forwards OBS's H.264 and Opus.
+- **Selection.** With the command line, pins and limits are set at start-up. A program
+  changes them at any time with `SetSelection`.
+- **Bitrate budget.** The tool keeps to the budget by asking for less video. The bridge
+  enforces it only where its operator allows it (see above).
+- **Latency.** On a local server, received video reaches the window about 225 ms after the
+  sender produced it, and audio about 185 ms ([docs/latency.md](docs/latency.md)). A real
+  network adds its own delay.
+- **Received audio.** The first 80 ms after a participant starts sending audio, or after
+  10 s without any, are lost.
+- **Platforms.** Linux was tested by hand, with a browser, OBS and a webcam. Windows and
+  macOS run the automated tests only. Camera capture, the window, and stopping cleanly on
+  those systems were not tried by hand.
+- **If the tool is killed,** its ffmpeg processes stop too: at once on Linux and Windows,
+  and on macOS as soon as their pipes close.
+
 ## Try it on a local Jitsi
 
 ```bash
@@ -392,7 +428,8 @@ JMT_URL=https://localhost:8443/jmt-live JMT_INSECURE=1 \
 | `internal/jitsi`, `internal/signaling` | XMPP and Jingle signaling |
 | `internal/peer`, `internal/rtpmedia` | WebRTC connections (to the bridge, and from WHIP publishers) and RTP framing |
 | `internal/whip` | WHIP HTTP endpoint: secret, addresses, stream resources |
-| `internal/ffmpeg` | ffmpeg processes: encoding and stream probing |
+| `internal/ffmpeg` | ffmpeg processes: encoders, decoders, feeds, recordings, devices and capability checks |
+| `internal/compose`, `internal/output` | Tile grid and audio mix; window, SRT feeds and recording files |
 | `internal/session` | Joins signaling and media, and runs the gateway's streams; the only package that imports both |
 | `tests/live/` | End-to-end tests (`-tags live`) |
 | `tests/platforms/jitsi/` | Local Jitsi in Docker |
