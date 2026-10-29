@@ -18,6 +18,14 @@ const (
 	feedAudioQueue = displayAudioQueue
 )
 
+// A gap longer than feedStall between queued packets is time the feed
+// waited for its caller. A stream starts at feedLead, so that the other
+// kind's packets made just before its first one stay positive.
+const (
+	feedStall = 500 * time.Millisecond
+	feedLead  = 100 * time.Millisecond
+)
+
 // FeedConfig describes an SRT feed for OBS.
 type FeedConfig struct {
 	FFmpeg        string
@@ -101,9 +109,25 @@ func (f *Feed) run(ctx context.Context) (*ffmpeg.Process, error) {
 	go func() {
 		defer w.Close()
 		nut := newNUTWriter(w, f.c.Width, f.c.Height)
-		for {
+		// Each ffmpeg's stream starts near 0, and the time the queue waited
+		// for a caller is cut out: a caller who comes late gets the stream
+		// as it is now, not one old frame and then a jump that players show
+		// as a frozen picture.
+		var shift, last time.Duration
+		for first := true; ; first = false {
 			pkt, ok := f.queue.pop(runCtx)
-			if !ok || pkt.writeTo(nut) != nil {
+			if !ok {
+				return
+			}
+			switch {
+			case first:
+				shift, last = pkt.at-feedLead, pkt.at
+			case pkt.at-last > feedStall:
+				shift += pkt.at - last - streamFrame
+			}
+			last = max(last, pkt.at)
+			pkt.at -= shift
+			if pkt.writeTo(nut) != nil {
 				return // A write to an ended ffmpeg fails
 			}
 		}

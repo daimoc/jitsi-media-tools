@@ -76,27 +76,9 @@ func TestFeed_ServesOneCallerAfterAnother(t *testing.T) {
 	}
 	defer f.Stop()
 
-	// A participant's tile stream: a frame every 33 ms, a chunk every 20 ms.
 	stop := make(chan struct{})
 	defer close(stop)
-	go func() {
-		frame := compose.NewFrame(w, h)
-		frame.Fill(160, 90, 200)
-		video := time.NewTicker(compose.VideoInterval)
-		audio := time.NewTicker(compose.AudioInterval)
-		defer video.Stop()
-		defer audio.Stop()
-		for {
-			select {
-			case <-stop:
-				return
-			case <-video.C:
-				f.WriteVideo(frame.Bytes(nil), time.Now())
-			case <-audio.C:
-				f.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes), time.Now())
-			}
-		}
-	}()
+	go writeTiles(f, w, h, stop)
 
 	for i := 1; i <= 2; i++ {
 		report := readFeed(t, bin, port)
@@ -107,6 +89,74 @@ func TestFeed_ServesOneCallerAfterAnother(t *testing.T) {
 			t.Errorf("caller %d: not %dx%d:\n%s", i, w, h, report)
 		}
 	}
+}
+
+// A caller that comes long after the feed started gets the stream as it
+// is now, at its normal rate: the time the feed waited is not in it.
+func TestFeed_LateFirstCaller(t *testing.T) {
+	bin := ffmpegtest.Require(t)
+	caps, err := ffmpeg.Probe(context.Background(), bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := caps.Missing(ffmpeg.NeedSRT, ffmpeg.NeedH264Encoder, ffmpeg.NeedAACEncoder); err != nil {
+		t.Skip(err)
+	}
+	port := freeUDPPort(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	const w, h = 320, 180
+	f, err := StartFeed(ctx, FeedConfig{FFmpeg: bin, Name: "Alice", Width: w, Height: h, Logger: quiet,
+		ListenURL: "srt://127.0.0.1:" + strconv.Itoa(port) + "?mode=listener&latency=120000&transtype=live"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Stop()
+	stop := make(chan struct{})
+	defer close(stop)
+	go writeTiles(f, w, h, stop)
+
+	time.Sleep(3 * time.Second) // Nobody watches yet
+	report := readFeed(t, bin, port)
+	if n := framesRead(report); n < 20 {
+		t.Errorf("a second of the feed after a 3 s wait held %d frames, want about 30:\n%s", n, report)
+	}
+}
+
+// writeTiles writes a participant's tile stream into f until stop closes:
+// a frame every 33 ms, a chunk every 20 ms.
+func writeTiles(f *Feed, w, h int, stop <-chan struct{}) {
+	frame := compose.NewFrame(w, h)
+	frame.Fill(160, 90, 200)
+	video := time.NewTicker(compose.VideoInterval)
+	audio := time.NewTicker(compose.AudioInterval)
+	defer video.Stop()
+	defer audio.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-video.C:
+			f.WriteVideo(frame.Bytes(nil), time.Now())
+		case <-audio.C:
+			f.WriteAudio(make([]byte, ffmpeg.DecodedChunkBytes), time.Now())
+		}
+	}
+}
+
+// framesRead returns the last frame count in an ffmpeg report.
+func framesRead(report string) int {
+	n := 0
+	for _, line := range strings.FieldsFunc(report, func(r rune) bool { return r == '\r' || r == '\n' }) {
+		if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "frame="); ok {
+			if fields := strings.Fields(rest); len(fields) > 0 {
+				if v, err := strconv.Atoi(fields[0]); err == nil {
+					n = v
+				}
+			}
+		}
+	}
+	return n
 }
 
 // Stop ends the feed's ffmpeg, also while it waits for a caller.
