@@ -543,6 +543,12 @@ once someone else is in the room, because the server sets up media only when the
 second participant. See [tests/platforms/jitsi/README.md](tests/platforms/jitsi/README.md)
 for the guest and token setups.
 
+## Video tutorials
+
+[tutorials/](tutorials/README.md) makes four narrated videos from scripts, against the local
+Jitsi: publishing a file, recording, the WHIP gateway (natively and in Docker), and SRT feeds
+in Docker. Each shows a real terminal next to the meeting as a participant sees it.
+
 ## Development
 
 ```bash

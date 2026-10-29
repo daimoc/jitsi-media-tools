@@ -28,10 +28,11 @@ var feedsTutorial = tutorial{
 		s.Say("In the meeting tut-feeds, Clip is publishing a video.")
 		s.Run("R=https://localhost:8443/tut-feeds", 5*time.Second)
 		n := s.Narrate("Dash dash obs serves a feed for each participant, and dash dash obs grid adds the whole room as a tile grid. Dash dash obs host keeps the feeds on this machine, and the host network keeps their ports as they are.")
-		s.Type("docker run --rm --name jmt-feeds --network host " + image + " join --url $R --insecure --name Feeds --obs --obs-grid --obs-host 127.0.0.1 --log-level warn")
+		s.Type("docker run --rm --name jmt-feeds --network host " + image + " join --url $R --insecure --name Feeds --obs --obs-grid --obs-host 127.0.0.1 --video-height 360 --log-level warn")
 		s.WaitFor("feed Clip", 40*time.Second)
 		n.Wait()
 		s.Say("Each feed has its own address: the grid on port 9000, and Clip on port 9001. A participant keeps the same address for the whole session.")
+		s.Say("A feed is as sharp as the video the tool receives. Dash dash video height 360 asks the bridge for more than the default, 180.")
 
 		s.Step(steps, "Add them to OBS")
 		s.Card("OBS: add a Media Source", tableCard("OBS: Sources → + → Media Source", "",
