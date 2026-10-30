@@ -52,8 +52,9 @@ type outputs struct {
 	grid    *output.Feed      // Nil without the grid feed
 	mixed   *output.Recording // Nil without the mixed recording
 
-	syncMu sync.Mutex // One sync at a time: it opens outputs outside mu
-	mu     sync.Mutex
+	syncMu  sync.Mutex // One sync at a time: it opens outputs outside mu
+	stopped bool       // Under syncMu: no output opens after stop
+	mu      sync.Mutex
 	byName map[string]*tile  // Lower-cased name
 	urls   map[string]string // Name ("" for the grid) -> URL
 	sent   map[string]bool   // Participant ids whose audio came
@@ -156,6 +157,9 @@ func (o *outputs) writeFeeds() {
 func (o *outputs) sync(parts []Participant) {
 	o.syncMu.Lock()
 	defer o.syncMu.Unlock()
+	if o.stopped {
+		return
+	}
 	present := map[string]string{} // Lower-cased name -> id
 	var opened []Event
 	feedsChanged := false
@@ -331,6 +335,10 @@ func (o *outputs) URLs() map[string]string {
 // stop ends the feeds and finishes the recordings, all at once: each
 // recording may take a moment to write its end.
 func (o *outputs) stop() {
+	// A sync under way would add outputs after the ones stopped here.
+	o.syncMu.Lock()
+	o.stopped = true
+	o.syncMu.Unlock()
 	var stops []func()
 	o.mu.Lock()
 	for _, t := range o.byName {
