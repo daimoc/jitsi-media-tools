@@ -287,15 +287,20 @@ func (p *Peer) UploadLoss(kind string) float64 {
 }
 
 // RTT returns the round-trip time of the selected ICE candidate pair, 0
-// when unknown.
+// when unknown. Pion times a connectivity check with the monotonic clock,
+// which on Windows advances once per timer tick: a check faster than a
+// tick (loopback) measures 0, and is returned as minRTT.
 func (p *Peer) RTT() time.Duration {
 	for _, s := range p.pc.GetStats() {
-		if pair, ok := s.(webrtc.ICECandidatePairStats); ok && pair.Nominated && pair.CurrentRoundTripTime > 0 {
-			return time.Duration(pair.CurrentRoundTripTime * float64(time.Second))
+		if pair, ok := s.(webrtc.ICECandidatePairStats); ok && pair.Nominated && pair.ResponsesReceived > 0 {
+			return max(minRTT, time.Duration(pair.CurrentRoundTripTime*float64(time.Second)))
 		}
 	}
 	return 0
 }
+
+// minRTT is the RTT of a measured pair whose check took less than a clock tick.
+const minRTT = time.Microsecond
 
 // RequestKeyframe sends a picture loss indication about a received stream.
 func (p *Peer) RequestKeyframe(ssrc uint32) {
