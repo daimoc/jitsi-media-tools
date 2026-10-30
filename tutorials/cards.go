@@ -46,5 +46,6 @@ func code(s string) string { return "<code>" + html.EscapeString(s) + "</code>" 
 
 // endCard closes a tutorial.
 func endCard(next string) string {
-	return fmt.Sprintf(`<div class="big">Done</div><p>%s</p><p>Documentation: <span class="accent">github.com/daimoc/jitsi-media-tools</span></p>`, next)
+	return fmt.Sprintf(`<div class="big">Done</div><p>%s</p><p>Documentation: <span class="accent">github.com/daimoc/jitsi-media-tools</span></p>`+
+		`<p class="credit">Video: Big Buck Bunny, © 2008 Blender Foundation, www.bigbuckbunny.org, CC BY 3.0</p>`, next)
 }

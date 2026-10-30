@@ -552,7 +552,9 @@ for the guest and token setups.
 
 [tutorials/](tutorials/README.md) makes four narrated videos from scripts, against the local
 Jitsi: publishing a file, recording, the WHIP gateway (natively and in Docker), and SRT feeds
-in Docker. Each shows a real terminal next to the meeting as a participant sees it.
+in Docker. Each shows a real terminal next to the meeting as a participant sees it. The video
+they publish is an excerpt of [Big Buck Bunny](https://peach.blender.org/) (© 2008 Blender
+Foundation, CC BY 3.0).
 
 ## Development
 

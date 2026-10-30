@@ -22,6 +22,7 @@ import (
 type config struct {
 	root   string // The repository
 	chrome string
+	bunny  string // The video the tutorials publish
 	ffmpeg string
 	jitsi  string // Base URL of the Jitsi server
 	binDir string // Holds jitsi-media-tools and ffmpeg for the shell
@@ -147,6 +148,11 @@ func setup(jitsi, chrome string) (config, error) {
 	if _, err := os.Stat(cfg.tts.model); err != nil {
 		return cfg, errors.New("Piper not found: run ./scripts/get-piper.sh")
 	}
+	// The published video: Big Buck Bunny, (c) Blender Foundation, CC BY 3.0.
+	cfg.bunny = filepath.Join(root, ".tools", "bunny", "bunny.mp4")
+	if _, err := os.Stat(cfg.bunny); err != nil {
+		return cfg, errors.New("Big Buck Bunny not found: run ./scripts/get-bunny.sh")
+	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return cfg, errors.New("docker not found: the WHIP and feeds tutorials use it")
 	}
@@ -191,11 +197,11 @@ func record(cfg config, t tutorial, out string) (err error) {
 	if err := os.MkdirAll(filepath.Join(work, "samples"), 0o755); err != nil {
 		return err
 	}
-	clip, err := os.ReadFile(filepath.Join(cfg.root, "samples", "clip.mp4"))
+	bunny, err := os.ReadFile(cfg.bunny)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(work, "samples", "clip.mp4"), clip, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(work, "samples", "bunny.mp4"), bunny, 0o644); err != nil {
 		return err
 	}
 	logf := func(f string, a ...any) { fmt.Fprintf(os.Stderr, "   "+f+"\n", a...) }

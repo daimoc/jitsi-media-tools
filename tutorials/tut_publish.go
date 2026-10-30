@@ -25,23 +25,23 @@ var publishTutorial = tutorial{
 
 		s.Step(steps, "Join and publish")
 		n = s.Narrate("The join command enters the room. Dash dash name is the participant's display name, and dash dash publish file loop plays the file over and over.")
-		s.Type("jitsi-media-tools join --url $R --insecure --name Clip --publish file-loop:samples/clip.mp4 --log-level warn")
+		s.Type("jitsi-media-tools join --url $R --insecure --name Bunny --publish file-loop:samples/bunny.mp4 --log-level warn")
 		n.Wait()
 		s.WaitFor("joined room", 20*time.Second)
 		s.Say("Dash dash insecure accepts the self-signed certificate of this local test server. You would leave it out for a real one.")
-		s.Say("Clip is now in the meeting. Everyone sees its video and hears its sound.")
+		s.Say("Bunny is now in the meeting. Everyone sees its video and hears its sound.")
 		s.Pause(3 * time.Second)
 
 		s.Step(steps, "Leave")
 		s.Say("The tool stays in the meeting until you press Control C.")
 		s.Ctrl("c")
 		s.WaitFor("$ ", 15*time.Second)
-		s.Say("Clip leaves the meeting at once.")
+		s.Say("Bunny leaves the meeting at once.")
 		s.Pause(2 * time.Second)
 
 		s.Card("Other sources", tableCard("Other ways to publish", "",
-			[2]string{"Play once, then leave", code("--publish file:clip.mp4")},
-			[2]string{"Loop until Ctrl+C", code("--publish file-loop:clip.mp4")},
+			[2]string{"Play once, then leave", code("--publish file:bunny.mp4")},
+			[2]string{"Loop until Ctrl+C", code("--publish file-loop:bunny.mp4")},
 			[2]string{"Camera and microphone", code("--publish device:VIDEO,AUDIO") + "<br>" + code("jitsi-media-tools devices") + " lists them"},
 			[2]string{"Video size", code("--publish-size 640x360") + " (default 1280x720)"},
 			[2]string{"From OBS", "the WHIP gateway, " + code("serve") + ": see its tutorial"},

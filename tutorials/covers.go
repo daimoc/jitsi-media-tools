@@ -34,13 +34,13 @@ type cover struct {
 
 var covers = []cover{
 	{name: "publish", badge: "TUTORIAL 1/4", title: "Publish <em>a video</em>", sub: "into a Jitsi meeting, from the command line",
-		chip: "join --publish", accent: "#ffcf4a", at: "Clip is now in the meeting"},
+		chip: "join --publish", accent: "#ffcf4a", at: "Bunny is now in the meeting"},
 	{name: "record", badge: "TUTORIAL 2/4", title: "Record <em>Jitsi</em>", sub: "one file per participant, or the whole room",
-		chip: "join --record", accent: "#ff6b6b", file: "mixed-file.mp4", tag: "● REC  mixed.mkv"},
+		chip: "join --record", accent: "#ff6b6b", file: "bunny-file.mp4", tag: "● REC  Bunny.mkv"},
 	{name: "whip", badge: "TUTORIAL 3/4", title: "OBS <em>→</em> Jitsi", sub: "stream OBS into any meeting: the WHIP gateway",
 		chip: "serve", accent: "#57d48a", at: "A stream named O B S joins"},
 	{name: "feeds", badge: "TUTORIAL 4/4", title: "Jitsi <em>→</em> OBS", sub: "every participant as an SRT feed, in Docker",
-		chip: "join --obs", accent: "#c08bff", file: "grid.png", tag: "srt://127.0.0.1:9000"},
+		chip: "join --obs", accent: "#c08bff", file: "bunny.png", tag: "srt://127.0.0.1:9001"},
 }
 
 // The right pane of the stage, where the meeting is (stage.html).

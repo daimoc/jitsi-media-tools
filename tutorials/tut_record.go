@@ -10,8 +10,8 @@ var recordTutorial = tutorial{
 	name:  "record",
 	title: "Record a meeting",
 	prepare: func(s *Stage) {
-		s.Background("clip", "jitsi-media-tools", "join", "--url", s.cfg.jitsi+"/tut-record", "--insecure",
-			"--name", "Clip", "--publish", "file-loop:samples/clip.mp4")
+		s.Background("bunny", "jitsi-media-tools", "join", "--url", s.cfg.jitsi+"/tut-record", "--insecure",
+			"--name", "Bunny", "--publish", "file-loop:samples/bunny.mp4")
 		s.Meeting("tut-record")
 		s.Card("", titleCard("Record a meeting", "One file per participant, or one mixed file of the whole room."))
 		s.Pause(10 * time.Second)
@@ -24,13 +24,13 @@ var recordTutorial = tutorial{
 
 		s.Step(steps, "One file per participant")
 		s.Meeting("tut-record")
-		s.Say("In the meeting tut-record, a participant called Clip is publishing a video. The browser on the right is muted.")
+		s.Say("In the meeting tut-record, a participant called Bunny is publishing a video. The browser on the right is muted.")
 		s.Run("R=https://localhost:8443/tut-record", 5*time.Second)
 		n := s.Narrate("Dash dash record names the directory for the files. By default, each participant who sends media gets their own file.")
 		s.Type("jitsi-media-tools join --url $R --insecure --name Recorder --record rec --log-level warn")
 		n.Wait()
 		s.WaitFor("record ", 20*time.Second)
-		s.Say("The tool prints each file as it starts. Clip gets one. The browser sends nothing, so it gets none.")
+		s.Say("The tool prints each file as it starts. Bunny gets one. The browser sends nothing, so it gets none.")
 		s.Pause(4 * time.Second)
 		s.Say("Control C stops the recording and closes the files properly.")
 		s.Ctrl("c")
@@ -39,9 +39,9 @@ var recordTutorial = tutorial{
 		n = s.Narrate("Each file is Matroska, with H.264 video and AAC audio, which any player opens.")
 		s.Run("ffprobe -v error -show_entries stream=codec_name,width,height -of compact rec/*.mkv", 10*time.Second)
 		n.Wait()
-		playable(s, "rec", "clip-file.mp4")
-		s.Video("The file of Clip, played back", "clip-file.mp4")
-		s.Say("On the right, Clip's recording plays back.")
+		playable(s, "rec", "bunny-file.mp4")
+		s.Video("The file of Bunny, played back", "bunny-file.mp4")
+		s.Say("On the right, Bunny's recording plays back.")
 		s.Pause(2 * time.Second)
 
 		s.Step(steps, "One mixed file")
@@ -57,7 +57,7 @@ var recordTutorial = tutorial{
 		s.Run("ls rec", 5*time.Second)
 		playable(s, "rec", "mixed-file.mp4")
 		s.Video("The mixed file, played back", "mixed-file.mp4")
-		s.Say("The mixed file shows every participant in a grid: Clip's video, and a name card for the browser, which has no camera.")
+		s.Say("The mixed file shows every participant in a grid: Bunny's video, and a name card for the browser, which has no camera.")
 		s.Pause(2 * time.Second)
 
 		s.Step(steps, "Summary")

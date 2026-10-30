@@ -7,12 +7,12 @@ import (
 
 const image = "ghcr.io/daimoc/jitsi-media-tools:main"
 
-// whipPublisher stands in for OBS: ffmpeg 8 sends a test pattern by WHIP,
-// as OBS would.
+// whipPublisher stands in for OBS: ffmpeg 8 sends Big Buck Bunny, looped,
+// by WHIP, as OBS would.
 func whipPublisher(s *Stage, room, name string) *exec.Cmd {
-	return s.Background("publisher-"+name, "ffmpeg", "-hide_banner", "-loglevel", "error", "-re",
-		"-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30", "-f", "lavfi", "-i", "sine=frequency=440",
-		"-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-g", "30",
+	return s.Background("publisher-"+name, "ffmpeg", "-hide_banner", "-loglevel", "error",
+		"-re", "-stream_loop", "-1", "-i", "samples/bunny.mp4", "-vf", "scale=1280:720",
+		"-c:v", "libx264", "-bf", "0", "-preset", "veryfast", "-tune", "zerolatency", "-g", "30",
 		"-c:a", "libopus", "-ar", "48000", "-ac", "2",
 		"-f", "whip", "-authorization", "s3cret", "http://127.0.0.1:8090/whip/localhost:8443/"+room+"?name="+name)
 }
@@ -49,24 +49,24 @@ var whipTutorial = tutorial{
 			[2]string{"Service", "WHIP"},
 			[2]string{"Server", code("http://127.0.0.1:8090/whip/localhost:8443/tut-whip?name=OBS")},
 			[2]string{"Bearer Token", "the secret: " + code("s3cret")},
-			[2]string{"Video encoder", "H.264 (x264 or hardware)"},
+			[2]string{"Video encoder", "H.264 (x264 or hardware), or AV1"},
 			[2]string{"Audio encoder", "Opus"},
 			[2]string{"Keyframe interval", "1 s"},
 		))
 		s.Say("In O B S, open Settings, Stream. Choose the WHIP service.")
 		s.Say("The server address names the meeting: the Jitsi server, then the room, then the participant's name.")
-		s.Say("The bearer token is the secret. Set the encoder to H.264, and the keyframe interval to one second, so new viewers see the picture quickly.")
+		s.Say("The bearer token is the secret. Set the encoder to H.264, and the keyframe interval to one second, so new viewers see the picture quickly. A V 1 works too, when every viewer's browser can decode it.")
 
 		s.Step(steps, "Stream")
 		s.Meeting("tut-whip")
-		s.Say("O B S is not installed here, so f f m peg plays its part. It sends a test pattern by WHIP, exactly as O B S would.")
-		pub := whipPublisher(s, "tut-whip", "Pattern")
-		s.WaitFor("+ Pattern", 20*time.Second)
+		s.Say("O B S is not installed here, so f f m peg plays its part. It sends a short film, Big Buck Bunny, by WHIP, exactly as O B S would.")
+		pub := whipPublisher(s, "tut-whip", "Bunny")
+		s.WaitFor("+ Bunny", 20*time.Second)
 		s.Pause(3 * time.Second) // The picture follows the participant by about 2 s
-		s.Say("The gateway prints a plus line: Pattern has joined the meeting, and the browser shows its picture.")
+		s.Say("The gateway prints a plus line: Bunny has joined the meeting, and the browser shows its picture.")
 		s.Pause(5 * time.Second)
 		s.Stop(pub)
-		s.WaitFor("- Pattern", 20*time.Second)
+		s.WaitFor("- Bunny", 20*time.Second)
 		s.Say("When the stream stops, the participant leaves, and the gateway prints a minus line.")
 		s.Ctrl("c")
 		s.WaitFor("$ ", 15*time.Second)

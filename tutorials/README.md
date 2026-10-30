@@ -9,6 +9,13 @@ take of a headless Chrome page:
 The voice is [Piper](https://github.com/rhasspy/piper) with the `en_GB-cori-medium` voice,
 which was trained on public-domain LibriVox recordings. Nothing records your desktop.
 
+The participant they publish, "Bunny", plays 30 s of
+[Big Buck Bunny](https://peach.blender.org/) (© 2008 Blender Foundation,
+www.bigbuckbunny.org), licensed under
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The end card of each video credits
+it. Credit it in the description too wherever you post them, for example:
+`Video: Big Buck Bunny, © 2008 Blender Foundation, www.bigbuckbunny.org, CC BY 3.0`.
+
 | Name | Video |
 |---|---|
 | `publish` | Publish a media file into a meeting |
@@ -22,11 +29,12 @@ What you need:
 - the local Jitsi server, running (`tests/platforms/jitsi`);
 - ffmpeg (`./scripts/get-ffmpeg.sh`);
 - Piper (`./scripts/get-piper.sh`);
+- the Big Buck Bunny excerpt (`./scripts/get-bunny.sh`: a 121 MB download, cut to 30 s);
 - Google Chrome;
 - Docker, with access to `ghcr.io/daimoc/jitsi-media-tools:main`.
 
 ```bash
-./scripts/get-ffmpeg.sh && ./scripts/get-piper.sh
+./scripts/get-ffmpeg.sh && ./scripts/get-piper.sh && ./scripts/get-bunny.sh
 cd tutorials
 go run . all          # or: go run . publish whip
 ```
@@ -37,7 +45,7 @@ make; the narration is cached in `.cache/tts`.
 
 **YouTube thumbnails.** `go run . covers` writes `out/<name>-cover.jpg` once the videos are
 made. Each is 1280x720 and about 120 KB (YouTube takes up to 2 MB). Each pairs the title with
-a picture from that tutorial: a meeting frame, the mixed recording, or a frame of the grid
+a picture from that tutorial: a meeting frame, Bunny's recording, or a frame of Bunny's
 feed. `cover.html` is the layout and `covers.go` holds the texts.
 
 Each tutorial uses its own room (`tut-publish`, `tut-record`…). The driver builds
