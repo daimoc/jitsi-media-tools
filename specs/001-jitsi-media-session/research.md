@@ -345,3 +345,18 @@ Decisions taken for the plan. Each one: decision, rationale, alternatives consid
     gateway learns it only from Jicofo's offer, after OBS was answered (the offer comes with a
     second participant), so the stream then fails: it leaves the meeting, logs that the
     deployment does not accept H.264, and reports `StreamFailed`.
+- **AV1 pass-through (added 2026-10-30)**: the gateway also forwards AV1 as it comes, and
+  prefers H.264 when the publisher offers both. Checked on the local Jitsi (stable-11248):
+  - A session sending single-layer AV1 RTP (W/N aggregation headers, no Dependency
+    Descriptor; the ingest strips the publisher's header extensions, as for H.264) is
+    forwarded by the bridge and decoded by Chrome 154 at 1280x720 and 30 fps without loss,
+    from `--publish` (spike) and through `serve` (an SVT-AV1 WHIP publisher). The
+    Dependency Descriptor is not needed for one layer.
+  - The bridge converts nothing: a participant whose codec list lacks AV1 (jitsi-media-tools
+    receivers announce `vp8,vp9,h264`; Safari without a hardware decoder) gets no video from
+    the stream. The gateway logs a reminder; the docs recommend H.264 unless every viewer
+    decodes AV1.
+  - The first keyframe is an AV1 payload whose N bit is set or whose first OBU element is a
+    sequence header.
+  - Not checked: OBS's own AV1 packetization (libdatachannel) and Firefox; `--publish` stays
+    VP8 (AV1 there needs a codec choice from participants' lists and a VP8 fallback).

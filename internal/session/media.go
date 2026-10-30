@@ -67,10 +67,13 @@ func (m *media) publishKinds() []string {
 	return kinds
 }
 
-// publishCodec is the sent video codec: H.264 forwarded as it came, or
-// VP8 from the encoder ("").
+// publishCodec is the sent video codec: H.264 or AV1 forwarded as it
+// came, or VP8 from the encoder ("").
 func (m *media) publishCodec() string {
 	if p := m.s.cfg.Publish; p != nil && p.Input.Kind == "forward" {
+		if c := p.Input.Forwarded.VideoCodec; c != "" {
+			return c
+		}
 		return peer.H264Codec.MimeType
 	}
 	return ""

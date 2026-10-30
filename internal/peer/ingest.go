@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -73,9 +74,10 @@ type IngestConfig struct {
 // packets unchanged, but for their header extensions, which belong to this
 // connection (research R14).
 type Ingest struct {
-	pc     *webrtc.PeerConnection
-	logger *slog.Logger
-	kinds  []string
+	pc         *webrtc.PeerConnection
+	logger     *slog.Logger
+	kinds      []string
+	videoCodec string // webrtc.MimeTypeH264 or webrtc.MimeTypeAV1
 
 	mu   sync.Mutex
 	dest map[string]RTPWriter // By kind
@@ -101,7 +103,7 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 		cfg.IdleTimeout = defaultIngestIdle
 	}
 	m := &webrtc.MediaEngine{}
-	kinds, err := registerOffered(m, offer)
+	kinds, videoCodec, err := registerOffered(m, offer)
 	if err != nil {
 		return nil, "", err
 	}
@@ -126,7 +128,7 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	in := &Ingest{pc: pc, logger: cfg.Logger, kinds: kinds, dest: map[string]RTPWriter{}, done: make(chan struct{}),
+	in := &Ingest{pc: pc, logger: cfg.Logger, kinds: kinds, videoCodec: videoCodec, dest: map[string]RTPWriter{}, done: make(chan struct{}),
 		counts: map[string]*seqCounter{KindAudio: {}, KindVideo: {}}}
 	in.last.Store(time.Now().UnixNano())
 	pc.OnTrack(func(t *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { go in.forward(t) })
@@ -148,20 +150,24 @@ func NewIngest(cfg IngestConfig, offer string) (*Ingest, string, error) {
 	return in, answer, nil
 }
 
-// CheckOffer returns the media kinds an Ingest would forward from offer,
-// or ErrUnsupportedOffer, without creating anything.
-func CheckOffer(offer string) ([]string, error) {
+// CheckOffer returns the media kinds an Ingest would forward from offer and
+// its video codec (webrtc.MimeTypeH264 or webrtc.MimeTypeAV1, "" without
+// video), or ErrUnsupportedOffer, without creating anything.
+func CheckOffer(offer string) ([]string, string, error) {
 	return registerOffered(&webrtc.MediaEngine{}, offer)
 }
 
 // registerOffered registers the offer's H.264 (packetization mode 1) and
 // Opus formats as they are, whatever their profile, and returns the kinds
-// the offer sends.
-func registerOffered(m *webrtc.MediaEngine, offer string) ([]string, error) {
+// the offer sends and its video codec. AV1 is registered only when the
+// offer has no H.264, which more viewers can decode: the bridge forwards
+// the codec as it comes, and a viewer without an AV1 decoder sees nothing.
+func registerOffered(m *webrtc.MediaEngine, offer string) ([]string, string, error) {
 	var parsed sdp.SessionDescription
 	if err := parsed.Unmarshal([]byte(offer)); err != nil {
-		return nil, fmt.Errorf("%w: cannot parse it: %v", ErrUnsupportedOffer, err)
+		return nil, "", fmt.Errorf("%w: cannot parse it: %v", ErrUnsupportedOffer, err)
 	}
+	videoCodec := ""
 	var kinds []string
 	seen := map[string]bool{}
 	for _, md := range parsed.MediaDescriptions {
@@ -182,7 +188,7 @@ func registerOffered(m *webrtc.MediaEngine, offer string) ([]string, error) {
 				fmtp[pt] = line
 			}
 		}
-		n := 0
+		var offered []webrtc.RTPCodecParameters
 		for _, a := range md.Attributes {
 			if a.Key != "rtpmap" {
 				continue
@@ -196,33 +202,46 @@ func registerOffered(m *webrtc.MediaEngine, offer string) ([]string, error) {
 			switch {
 			case kind == KindVideo && strings.EqualFold(name, "H264/90000") && strings.Contains(fmtp[pt], "packetization-mode=1"):
 				c = webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH264, ClockRate: 90000, SDPFmtpLine: fmtp[pt], RTCPFeedback: videoFeedback}
+			case kind == KindVideo && strings.EqualFold(name, "AV1/90000"):
+				c = webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1, ClockRate: 90000, SDPFmtpLine: fmtp[pt], RTCPFeedback: videoFeedback}
 			case kind == KindAudio && strings.EqualFold(name, "opus/48000/2"):
 				c = webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeOpus, ClockRate: 48000, Channels: 2, SDPFmtpLine: fmtp[pt]}
 			default:
 				continue
 			}
-			typ := webrtc.RTPCodecTypeVideo
-			if kind == KindAudio {
-				typ = webrtc.RTPCodecTypeAudio
-			}
-			if err := m.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: c, PayloadType: webrtc.PayloadType(id)}, typ); err != nil {
-				return nil, err
-			}
-			n++
+			offered = append(offered, webrtc.RTPCodecParameters{RTPCodecCapability: c, PayloadType: webrtc.PayloadType(id)})
 		}
-		if n == 0 {
-			if kind == KindVideo {
-				return nil, fmt.Errorf("%w: the video is not H.264 (packetization mode 1); set the encoder to H.264", ErrUnsupportedOffer)
+		if kind == KindVideo {
+			for _, want := range []string{webrtc.MimeTypeH264, webrtc.MimeTypeAV1} {
+				if slices.ContainsFunc(offered, func(c webrtc.RTPCodecParameters) bool { return c.MimeType == want }) {
+					videoCodec = want
+					offered = slices.DeleteFunc(offered, func(c webrtc.RTPCodecParameters) bool { return c.MimeType != want })
+					break
+				}
 			}
-			return nil, fmt.Errorf("%w: the audio is not Opus", ErrUnsupportedOffer)
+		}
+		if len(offered) == 0 {
+			if kind == KindVideo {
+				return nil, "", fmt.Errorf("%w: the video is neither H.264 (packetization mode 1) nor AV1; set the encoder to H.264 or AV1", ErrUnsupportedOffer)
+			}
+			return nil, "", fmt.Errorf("%w: the audio is not Opus", ErrUnsupportedOffer)
+		}
+		typ := webrtc.RTPCodecTypeVideo
+		if kind == KindAudio {
+			typ = webrtc.RTPCodecTypeAudio
+		}
+		for _, c := range offered {
+			if err := m.RegisterCodec(c, typ); err != nil {
+				return nil, "", err
+			}
 		}
 		seen[kind] = true
 		kinds = append(kinds, kind)
 	}
 	if len(kinds) == 0 {
-		return nil, fmt.Errorf("%w: it sends no audio or video", ErrUnsupportedOffer)
+		return nil, "", fmt.Errorf("%w: it sends no audio or video", ErrUnsupportedOffer)
 	}
-	return kinds, nil
+	return kinds, videoCodec, nil
 }
 
 // answer applies the offer and returns the answer with all candidates:
@@ -248,6 +267,10 @@ func (in *Ingest) answer(offer string) (string, error) {
 
 // Kinds returns the media kinds the publisher sends.
 func (in *Ingest) Kinds() []string { return in.kinds }
+
+// VideoCodec returns the publisher's video codec: webrtc.MimeTypeH264 or
+// webrtc.MimeTypeAV1, "" without video.
+func (in *Ingest) VideoCodec() string { return in.videoCodec }
 
 // Forward sends the packets of kind received from now on to w.
 func (in *Ingest) Forward(kind string, w RTPWriter) {
@@ -288,7 +311,7 @@ func (in *Ingest) forward(t *webrtc.TrackRemote) {
 			if since.IsZero() {
 				since = time.Now()
 			}
-			if keyed = h264Keyframe(pkt.Payload); keyed {
+			if keyed = in.keyframe(pkt.Payload); keyed {
 				in.keyframeCame(time.Since(since))
 			} else {
 				in.RequestKeyframe()
@@ -354,6 +377,41 @@ func (in *Ingest) keyframeCame(wait time.Duration) {
 	}
 	in.logger.Warn("The meeting waited for the publisher's next keyframe: it ignores keyframe requests; "+
 		"set its keyframe interval to 1 s (OBS: Settings, Output, Keyframe Interval)", slog.Duration("waited", wait.Round(time.Millisecond)))
+}
+
+// keyframe reports whether a video RTP payload starts a keyframe.
+func (in *Ingest) keyframe(p []byte) bool {
+	if in.videoCodec == webrtc.MimeTypeAV1 {
+		return av1Keyframe(p)
+	}
+	return h264Keyframe(p)
+}
+
+// av1Keyframe reports whether an AV1 RTP payload (AV1 RTP specification,
+// 4.4) starts a coded video sequence: its N bit is set, or its first OBU
+// element, not a continuation, is a sequence header.
+func av1Keyframe(p []byte) bool {
+	if len(p) < 2 {
+		return false
+	}
+	if p[0]&0x08 != 0 { // N
+		return true
+	}
+	if p[0]&0x80 != 0 { // Z: the first element continues an OBU
+		return false
+	}
+	obu := p[1:]
+	if p[0]&0x30 != 0x10 { // W is not 1: the first element has a LEB128 length
+		n := 0
+		for n < len(obu) && obu[n]&0x80 != 0 {
+			n++
+		}
+		if n+1 >= len(obu) {
+			return false
+		}
+		obu = obu[n+1:]
+	}
+	return (obu[0]>>3)&0x0f == 1 // OBU_SEQUENCE_HEADER
 }
 
 // h264Keyframe reports whether an H.264 RTP payload (RFC 6184) starts an

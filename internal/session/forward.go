@@ -17,12 +17,17 @@ type Forwarder interface {
 // after the session joined (a gateway answers its publisher only then);
 // packets flow once both the source and the session's media are there.
 type Forwarded struct {
+	// VideoCodec is the source's video codec: H.264 when empty, or
+	// peer.AV1Codec's. It is set before the session starts.
+	VideoCodec string
+
 	mu     sync.Mutex
 	src    Forwarder
 	tracks map[string]peer.RTPWriter // By kind, once media connected
 }
 
-// ForwardInput sends f's packets unchanged: H.264 video and Opus audio.
+// ForwardInput sends f's packets unchanged: H.264 or AV1 video and Opus
+// audio.
 func ForwardInput(f *Forwarded) Input { return Input{Kind: "forward", Forwarded: f} }
 
 // Attach sets the source.

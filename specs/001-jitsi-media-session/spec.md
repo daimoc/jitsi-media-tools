@@ -235,8 +235,10 @@ streaming and "OBS" leaves.
    and joins nothing.
 5. **Given** two OBS instances stream to two different meetings at once, **Then** each meeting
    shows its own stream, and stopping one does not affect the other.
-6. **Given** OBS streams video in a codec other than H.264 (AV1, HEVC), **Then** the gateway
-   refuses the request with a message that names H.264, and joins nothing.
+6. **Given** OBS streams video in a codec other than H.264 or AV1 (HEVC), **Then** the gateway
+   refuses the request with a message that names H.264 and AV1, and joins nothing.
+   **Given** OBS streams AV1, **Then** it is forwarded unchanged, as H.264 is; a publisher
+   offering both gets H.264 (amended 2026-10-30).
 7. **Given** OBS is streaming through the gateway, **When** a browser participant opens the
    connection details of the OBS tile, **Then** it shows the stream's bitrate, its packet
    loss from OBS to the meeting, and a connection quality, updated every 10 seconds
@@ -331,10 +333,11 @@ streaming and "OBS" leaves.
   refuse to start without one, and MUST refuse requests without it.
 - **FR-026**: The gateway MUST join any Jitsi deployment named in the address, with the same
   discovery, guest and token support as a session (FR-002–FR-005).
-- **FR-027**: The gateway MUST forward the publisher's H.264 video and Opus audio to the meeting
-  without decoding or re-encoding them, and MUST pass the meeting's keyframe requests back to the
-  publisher. It MUST refuse a publisher that offers no H.264 video or no Opus audio, unless it
-  sends only the other kind.
+- **FR-027**: The gateway MUST forward the publisher's H.264 or AV1 video and Opus audio to the
+  meeting without decoding or re-encoding them, and MUST pass the meeting's keyframe requests back
+  to the publisher. It MUST choose H.264 when the publisher offers both. It MUST refuse a
+  publisher that offers neither H.264 nor AV1 video, or no Opus audio, unless it sends only the
+  other kind. (AV1 added 2026-10-30.)
 - **FR-028**: The participant MUST leave when the publisher ends the stream (WHIP resource
   deleted) or after 10 seconds without media, and all participants MUST leave when the gateway
   stops.

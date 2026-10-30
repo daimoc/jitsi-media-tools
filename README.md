@@ -8,7 +8,7 @@ room as one participant, publishes media into it, and plays what the other parti
 
 - **Publish**: a media file (once or looped), or a camera and microphone.
 - **OBS gateway**: a WHIP endpoint that streams OBS (or any WHIP publisher) into any Jitsi
-  meeting as a participant, its H.264 and Opus passed through unchanged. See
+  meeting as a participant, its H.264 or AV1 video and Opus audio passed through unchanged. See
   [Stream OBS into a meeting](#stream-obs-into-a-meeting-whip-gateway), with or without Docker.
 - **Play**: show the room in a Jitsi-style tile grid, record it (one file per participant or
   one mixed file), and serve SRT feeds that OBS Media Sources can read.
@@ -42,7 +42,7 @@ them](docs/media-pipeline.svg)
   is mixed. Each participant's screen share gets its own tile. The window plays the grid and
   the mix through ffplay, and the library callbacks get the same media.
 - **Gateway**: `serve` answers WHIP publishers such as OBS. Each stream joins the meeting
-  named in its address as a send-only participant, and its H.264 and Opus packets go to the
+  named in its address as a send-only participant, and its H.264 or AV1 and Opus packets go to the
   Videobridge as they came, without ffmpeg. Keyframe requests from the room go back to OBS.
 - **Signaling**: XMPP over WebSocket with Jicofo and Prosody. Jingle offers become SDP for
   the WebRTC connection, and presence tells the tool who is in the room, their names and
@@ -313,7 +313,7 @@ takes `debug`, `info` or `warn`.
 
 `serve` is a [WHIP](https://www.rfc-editor.org/rfc/rfc9725) endpoint. OBS 30 or newer, or
 any other WHIP publisher, streams to it, and each stream joins the Jitsi meeting named in
-its address as a participant. The H.264 video and Opus audio pass through unchanged, so the
+its address as a participant. The H.264 or AV1 video and Opus audio pass through unchanged, so the
 gateway needs no ffmpeg and little CPU. One gateway serves several streams at once, into
 any Jitsi meetings.
 
@@ -378,8 +378,13 @@ The server address names the meeting and the participant:
 
 Then set the encoding (Settings → Output, Output Mode "Advanced"):
 
-- **Video encoder:** H.264 (x264, or a hardware H.264 encoder). The gateway refuses AV1 and
-  HEVC. **Audio:** Opus, OBS's WHIP default.
+- **Video encoder:** H.264 (x264, or a hardware H.264 encoder), or AV1 (SVT-AV1, or a
+  hardware AV1 encoder). The gateway refuses HEVC. **Audio:** Opus, OBS's WHIP default.
+- **H.264 or AV1?** H.264 unless you know every viewer can decode AV1. The Videobridge
+  forwards the stream as it comes and converts nothing, so a viewer without an AV1 decoder
+  sees only a name card: Safari without hardware AV1 decoding, older browsers, and
+  jitsi-media-tools receivers (`join --display`, `--record`, `--obs`). Chrome and Firefox
+  decode AV1. The gateway logs a reminder when it forwards AV1.
 - **Keyframe interval: 1 s.** Viewers see video from a keyframe on, and a publisher that
   ignores keyframe requests makes them wait for its next one: about 8 s with OBS's
   "0 (auto)" and x264. The gateway logs a warning when that happens.
@@ -511,7 +516,7 @@ pub.WriteAudio(chunk)                              // every 20 ms
   through the Videobridge.
 - **Codecs.** The tool receives VP8, VP9 and H.264 video and Opus audio. A participant who
   sends AV1 shows a name card, and the tool logs a warning once. It publishes one VP8 layer
-  (no simulcast) and Opus; the gateway forwards OBS's H.264 and Opus.
+  (no simulcast) and Opus; the gateway forwards OBS's H.264 or AV1 and Opus.
 - **Selection.** With the command line, pins and limits are set at start-up. A program
   changes them at any time with `SetSelection`.
 - **Bitrate budget.** The tool keeps to the budget by asking for less video. The bridge

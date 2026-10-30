@@ -53,6 +53,8 @@ import media packages and vice versa; `internal/session` is the only glue. `cmd/
 
 ## Recent Changes
 
+- 001-jitsi-media-session: the WHIP gateway forwards AV1 too (H.264 preferred when both are
+  offered); `Forwarded.VideoCodec`, `peer.AV1Codec`, research R14
 - 001-jitsi-media-session: Docker image (`Dockerfile`, `compose.yaml`); `--obs-url-host`; the
   WHIP mux with `--public-ip` is one socket on every interface (Pion ties a 1:1 public
   candidate to the first socket only)

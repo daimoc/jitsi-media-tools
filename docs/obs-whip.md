@@ -29,7 +29,7 @@ Settings → **Output**, Output Mode **Advanced**, **Streaming** tab:
 
 | Setting | Value | Why |
 |---|---|---|
-| Video Encoder | an **H.264** encoder: x264, NVIDIA NVENC H.264, QuickSync H.264, AMD H.264, Apple VT H.264 | The gateway refuses AV1 and HEVC: Jitsi and browsers expect H.264 |
+| Video Encoder | an **H.264** encoder: x264, NVIDIA NVENC H.264, QuickSync H.264, AMD H.264, Apple VT H.264; or an **AV1** encoder (SVT-AV1, NVENC AV1, QuickSync AV1, AMD AV1) | Every browser decodes H.264. AV1 plays in Chrome and Firefox, but a viewer without an AV1 decoder (Safari without hardware AV1, jitsi-media-tools receivers) sees no video, as the bridge converts nothing. The gateway refuses HEVC |
 | Audio Encoder | Opus (the WHIP default) | Opus is the only audio codec WebRTC meetings use |
 | Rate Control | **CBR** | A steady bitrate; bursts are lost on viewers' connections |
 | **Keyframe Interval** | **1 s** | Sets how long viewers wait for the picture; see [Start time](#start-time) |

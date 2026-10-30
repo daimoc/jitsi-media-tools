@@ -50,13 +50,17 @@ func NewGateway(cfg GatewayConfig) *Gateway {
 // Publish checks the offer, joins the meeting, then answers the publisher.
 // ctx bounds the join.
 func (g *Gateway) Publish(ctx context.Context, r whip.Request) (whip.Stream, error) {
-	kinds, err := peer.CheckOffer(r.Offer)
+	kinds, videoCodec, err := peer.CheckOffer(r.Offer)
 	if err != nil {
 		return whip.Stream{}, &whip.Error{Status: http.StatusBadRequest, Msg: strings.TrimPrefix(err.Error(), peer.ErrUnsupportedOffer.Error()+": ")}
 	}
 	meeting, _, _ := strings.Cut(r.MeetingURL, "?")
 	logger := g.cfg.Session.Logger.With(slog.String("meeting", meeting), slog.String("name", r.Name))
-	fw := &Forwarded{}
+	if videoCodec == peer.AV1Codec.MimeType {
+		// The bridge forwards AV1 as it comes (research R14).
+		logger.Info("Forwarding AV1 video: participants whose browser cannot decode AV1 see no video from this stream")
+	}
+	fw := &Forwarded{VideoCodec: videoCodec}
 	cfg := g.cfg.Session
 	cfg.MeetingURL, cfg.DisplayName, cfg.Logger, cfg.SendOnly = r.MeetingURL, r.Name, logger, true
 	cfg.Publish = &Publish{Input: ForwardInput(fw), Audio: slices.Contains(kinds, peer.KindAudio), Video: slices.Contains(kinds, peer.KindVideo)}

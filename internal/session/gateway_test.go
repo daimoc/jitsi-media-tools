@@ -18,7 +18,8 @@ import (
 	"github.com/daimoc/jitsi-media-tools/internal/whip"
 )
 
-// whipPublisher is a WHIP publisher like OBS: H.264 High profile and Opus.
+// whipPublisher is a WHIP publisher like OBS: H.264 High profile (or AV1)
+// and Opus.
 type whipPublisher struct {
 	pc           *webrtc.PeerConnection
 	video, audio *webrtc.TrackLocalStaticRTP
@@ -110,6 +111,12 @@ func newTestGateway(idle time.Duration) *Gateway {
 }
 
 func TestGateway_ForwardsToTheMeeting(t *testing.T) {
+	for _, c := range []webrtc.RTPCodecCapability{h264High, {MimeType: webrtc.MimeTypeAV1, ClockRate: 90000}} {
+		t.Run(c.MimeType, func(t *testing.T) { testGatewayForwards(t, c) })
+	}
+}
+
+func testGatewayForwards(t *testing.T, codec webrtc.RTPCodecCapability) {
 	var audio atomic.Int32
 	videoCodec := make(chan string, 1)
 	f := &fakeSignal{Setup: func(b *webrtc.PeerConnection) {
@@ -131,7 +138,7 @@ func TestGateway_ForwardsToTheMeeting(t *testing.T) {
 	}}
 	useFake(t, f)
 	g := newTestGateway(0)
-	pub := newWHIPPublisher(t, h264High)
+	pub := newWHIPPublisher(t, codec)
 	st, err := g.Publish(context.Background(), whip.Request{MeetingURL: "https://meet.test/Room", Name: "OBS", Offer: pub.offer(t)})
 	if err != nil {
 		t.Fatal(err)
@@ -146,8 +153,8 @@ func TestGateway_ForwardsToTheMeeting(t *testing.T) {
 
 	select {
 	case mime := <-videoCodec:
-		if mime != webrtc.MimeTypeH264 {
-			t.Errorf("the meeting receives %s video, want H.264", mime)
+		if mime != codec.MimeType {
+			t.Errorf("the meeting receives %s video, want %s", mime, codec.MimeType)
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("no video reached the meeting")
@@ -187,11 +194,11 @@ func TestGateway_RefusesOtherCodecsWithoutJoining(t *testing.T) {
 	f := &fakeSignal{}
 	useFake(t, f)
 	g := newTestGateway(0)
-	pub := newWHIPPublisher(t, webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1, ClockRate: 90000})
+	pub := newWHIPPublisher(t, webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH265, ClockRate: 90000})
 	_, err := g.Publish(context.Background(), whip.Request{MeetingURL: "https://meet.test/Room", Name: "OBS", Offer: pub.offer(t)})
 	var we *whip.Error
 	if !errors.As(err, &we) || we.Status != http.StatusBadRequest {
-		t.Fatalf("Publish with AV1: %v, want a 400 whip.Error", err)
+		t.Fatalf("Publish with HEVC: %v, want a 400 whip.Error", err)
 	}
 	if f.Handler() != nil {
 		t.Error("joined the meeting")

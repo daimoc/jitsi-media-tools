@@ -9,7 +9,7 @@
 //
 // A Gateway is the way in for OBS and other WHIP publishers: each stream
 // posted to it joins the meeting its address names as one participant, its
-// H.264 and Opus forwarded unchanged (NewGateway).
+// H.264 or AV1 and Opus forwarded unchanged (NewGateway).
 //
 // Received media reaches the program through callbacks set on the
 // Session: OnVideo (each selected participant's decoded video), OnGrid (the

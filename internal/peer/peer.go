@@ -54,7 +54,8 @@ type Config struct {
 	// VideoWidth and VideoHeightSent are the size of the sent video.
 	VideoWidth, VideoHeightSent int
 	// VideoCodec is the codec of the sent video: "" or webrtc.MimeTypeVP8,
-	// or webrtc.MimeTypeH264 for H.264 forwarded as it came (Ingest).
+	// or webrtc.MimeTypeH264 or webrtc.MimeTypeAV1 for video forwarded as
+	// it came (Ingest).
 	VideoCodec string
 }
 
@@ -161,9 +162,13 @@ func (p *Peer) addLocalTracks() error {
 	for _, kind := range p.cfg.Kinds {
 		codec := OpusCodec
 		if kind == KindVideo {
-			codec = VP8Codec
-			if p.cfg.VideoCodec == webrtc.MimeTypeH264 {
+			switch p.cfg.VideoCodec {
+			case webrtc.MimeTypeH264:
 				codec = H264Codec
+			case webrtc.MimeTypeAV1:
+				codec = AV1Codec
+			default:
+				codec = VP8Codec
 			}
 		}
 		track, err := webrtc.NewTrackLocalStaticRTP(codec, kind, streamID)

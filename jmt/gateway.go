@@ -37,7 +37,7 @@ type GatewayOptions struct {
 // A publisher posts its offer to /whip/<server[:port]>/<room>?name=<name>
 // (optionally &jwt=<token> for the meeting) with the secret as its bearer
 // token; the gateway joins the meeting as that participant and forwards
-// the publisher's H.264 video and Opus audio unchanged. The participant
+// the publisher's H.264 or AV1 video and Opus audio unchanged. The participant
 // leaves when the publisher stops (DELETE on the stream's address), after
 // 10 s without media, or when the gateway closes.
 type Gateway struct {

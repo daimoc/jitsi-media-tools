@@ -218,11 +218,71 @@ func TestIngest_RequestKeyframe(t *testing.T) {
 }
 
 func TestIngest_RefusesOtherVideoCodecs(t *testing.T) {
-	av1 := webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1, ClockRate: 90000}
-	pub, _, _ := publisherPC(t, av1, true)
+	hevc := webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeH265, ClockRate: 90000}
+	pub, _, _ := publisherPC(t, hevc, true)
 	_, _, err := NewIngest(IngestConfig{Logger: quietLogger}, offerOf(t, pub))
 	if !errors.Is(err, ErrUnsupportedOffer) {
-		t.Fatalf("NewIngest with AV1 video: %v, want ErrUnsupportedOffer", err)
+		t.Fatalf("NewIngest with HEVC video: %v, want ErrUnsupportedOffer", err)
+	}
+	if !strings.Contains(err.Error(), "H.264") || !strings.Contains(err.Error(), "AV1") {
+		t.Errorf("error %q does not name H.264 and AV1", err)
+	}
+}
+
+var av1 = webrtc.RTPCodecCapability{MimeType: webrtc.MimeTypeAV1, ClockRate: 90000}
+
+func TestIngest_ForwardsAV1(t *testing.T) {
+	pub, vt, _ := publisherPC(t, av1, true)
+	ing, answer := newTestIngest(t, offerOf(t, pub))
+	if got := ing.VideoCodec(); got != webrtc.MimeTypeAV1 {
+		t.Fatalf("VideoCodec() = %q, want AV1", got)
+	}
+	if err := pub.SetRemoteDescription(webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: answer}); err != nil {
+		t.Fatal(err)
+	}
+	video := newPacketLog()
+	ing.Forward(KindVideo, video)
+	payload := []byte{0x18, 0x0a, 0x0b} // N=1, W=1: a sequence header OBU
+	deadline := time.Now().Add(5 * time.Second)
+	for seq := uint16(1); len(video.packets()) < 3 && time.Now().Before(deadline); seq++ {
+		vt.WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, Marker: true, Timestamp: 3000, SequenceNumber: seq}, Payload: payload})
+		time.Sleep(20 * time.Millisecond)
+	}
+	pkts := video.packets()
+	if len(pkts) < 3 {
+		t.Fatalf("%d packets forwarded, want some", len(pkts))
+	}
+	for _, p := range pkts {
+		if !bytes.Equal(p.Payload, payload) || p.Timestamp != 3000 {
+			t.Fatalf("forwarded %+v, want the payload and timestamp sent", p)
+		}
+	}
+}
+
+// An offer with both codecs gets H.264, which more viewers can decode.
+func TestCheckOffer_PrefersH264(t *testing.T) {
+	m := &webrtc.MediaEngine{}
+	for i, c := range []webrtc.RTPCodecCapability{av1, h264High} {
+		if err := m.RegisterCodec(webrtc.RTPCodecParameters{RTPCodecCapability: c, PayloadType: webrtc.PayloadType(45 + i*61)}, webrtc.RTPCodecTypeVideo); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pc, err := webrtc.NewAPI(webrtc.WithMediaEngine(m)).NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pc.Close()
+	if _, err := pc.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionSendonly}); err != nil {
+		t.Fatal(err)
+	}
+	offer := offerOf(t, pc)
+	_, codec, err := CheckOffer(offer)
+	if err != nil || codec != webrtc.MimeTypeH264 {
+		t.Fatalf("CheckOffer = %q, %v; want H.264", codec, err)
+	}
+	ing, answer := newTestIngest(t, offer)
+	if ing.VideoCodec() != webrtc.MimeTypeH264 || strings.Contains(answer, "AV1") {
+		t.Errorf("ingest codec %q, answer offers AV1: %v", ing.VideoCodec(), strings.Contains(answer, "AV1"))
 	}
 }
 
@@ -244,36 +304,40 @@ func TestIngest_EndsWhenIdle(t *testing.T) {
 	}
 }
 
-func TestPeer_SendsH264(t *testing.T) {
-	p, err := New(Config{Logger: quietLogger, Kinds: []string{KindVideo}, VideoCodec: webrtc.MimeTypeH264})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer p.Close()
-	remote, err := webrtc.NewPeerConnection(webrtc.Configuration{}) // Offers VP8, VP9 and H.264, as Jicofo
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer remote.Close()
-	if _, err := remote.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
-		t.Fatal(err)
-	}
-	codec := make(chan string, 1)
-	remote.OnTrack(func(tr *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { codec <- tr.Codec().MimeType })
-	connect(t, remote, p)
-	for i := 0; i < 250; i++ {
-		select {
-		case c := <-codec:
-			if c != webrtc.MimeTypeH264 {
-				t.Fatalf("remote receives %s, want H.264", c)
+func TestPeer_SendsForwardedCodecs(t *testing.T) {
+	for _, want := range []string{webrtc.MimeTypeH264, webrtc.MimeTypeAV1} {
+		t.Run(want, func(t *testing.T) {
+			p, err := New(Config{Logger: quietLogger, Kinds: []string{KindVideo}, VideoCodec: want})
+			if err != nil {
+				t.Fatal(err)
 			}
-			return
-		default:
-		}
-		p.LocalTrack(KindVideo).WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: uint16(i)}, Payload: []byte{0x65, 1}})
-		time.Sleep(20 * time.Millisecond)
+			defer p.Close()
+			remote, err := webrtc.NewPeerConnection(webrtc.Configuration{}) // Offers VP8, VP9, H.264 and AV1, as Jicofo
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer remote.Close()
+			if _, err := remote.AddTransceiverFromKind(webrtc.RTPCodecTypeVideo, webrtc.RTPTransceiverInit{Direction: webrtc.RTPTransceiverDirectionRecvonly}); err != nil {
+				t.Fatal(err)
+			}
+			codec := make(chan string, 1)
+			remote.OnTrack(func(tr *webrtc.TrackRemote, _ *webrtc.RTPReceiver) { codec <- tr.Codec().MimeType })
+			connect(t, remote, p)
+			for i := 0; i < 250; i++ {
+				select {
+				case c := <-codec:
+					if c != want {
+						t.Fatalf("remote receives %s, want %s", c, want)
+					}
+					return
+				default:
+				}
+				p.LocalTrack(KindVideo).WriteRTP(&rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: uint16(i)}, Payload: []byte{0x65, 1}})
+				time.Sleep(20 * time.Millisecond)
+			}
+			t.Fatal("no video reached the remote side")
+		})
 	}
-	t.Fatal("no video reached the remote side")
 }
 
 // Ingests share one UDP port, and give the public address in their answer.
@@ -401,6 +465,26 @@ func TestH264Keyframe(t *testing.T) {
 		{"short", []byte{0x65}, false},
 	} {
 		if got := h264Keyframe(c.p); got != c.want {
+			t.Errorf("%s: %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestAV1Keyframe(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		p    []byte
+		want bool
+	}{
+		{"N bit", []byte{0x08, 0x01, 0x02}, true},
+		{"W=1, sequence header", []byte{0x10, 0x0a, 0x0b}, true},
+		{"W=0, sequence header", []byte{0x00, 0x02, 0x0a, 0x0b, 0x01, 0x32}, true},
+		{"W=2, frame then nothing", []byte{0x20, 0x01, 0x32, 0x0a}, false},
+		{"frame OBU", []byte{0x10, 0x32, 0x00}, false},
+		{"continuation (Z) of a sequence header", []byte{0x90, 0x0a, 0x0b}, false},
+		{"short", []byte{0x10}, false},
+	} {
+		if got := av1Keyframe(c.p); got != c.want {
 			t.Errorf("%s: %v, want %v", c.name, got, c.want)
 		}
 	}
