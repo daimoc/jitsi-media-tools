@@ -315,7 +315,7 @@ takes `debug`, `info` or `warn`.
 any other WHIP publisher, streams to it, and each stream joins the Jitsi meeting named in
 its address as a participant. The H.264 or AV1 video and Opus audio pass through unchanged, so the
 gateway needs no ffmpeg and little CPU. One gateway serves several streams at once, into
-any Jitsi meetings.
+any Jitsi meetings. Video: [OBS → Jitsi with the WHIP gateway](https://www.youtube.com/watch?v=xMzMXCI4Mjo).
 
 ```text
 OBS ── WHIP: HTTP offer/answer, then WebRTC media ──▶ serve ── one participant per stream ──▶ Jitsi meeting
@@ -549,6 +549,10 @@ second participant. See [tests/platforms/jitsi/README.md](tests/platforms/jitsi/
 for the guest and token setups.
 
 ## Video tutorials
+
+- [Publish a video file into a meeting](https://www.youtube.com/watch?v=XNfNdoNPYzg)
+- [Record a Jitsi meeting](https://www.youtube.com/watch?v=LLoFScThED0)
+- [OBS → Jitsi with the WHIP gateway](https://www.youtube.com/watch?v=xMzMXCI4Mjo), natively and in Docker
 
 [tutorials/](tutorials/README.md) makes four narrated videos from scripts, against the local
 Jitsi: publishing a file, recording, the WHIP gateway (natively and in Docker), and SRT feeds
